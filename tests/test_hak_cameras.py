@@ -7,7 +7,7 @@ from traffic_monitor.models import Alert
 CONFIG = {
     "hak_cameras": {
         "page": "https://m.hak.hr/kamera.asp?g=2&k=177",
-        "model": "gpt-4o",
+        "model": "gpt-5-nano",
         "analyze_min_severity": "warning",
         "cams": [
             {
@@ -141,8 +141,8 @@ def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Einfahrtspur" in hc._PROMPT
     assert "SCHLIMMSTEN" in hc._PROMPT or "Worst" in hc._PROMPT or "schlimmsten" in hc._PROMPT.lower()
-    assert hc._PROMPT_VERSION >= 8
-    assert hc.DEFAULT_MODEL == "gpt-4o"
+    assert hc._PROMPT_VERSION >= 9
+    assert hc.DEFAULT_MODEL == "gpt-5-nano"
 
 
 def test_parse_openai_fenced_json():
@@ -213,7 +213,7 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
     assert by_id[430].delay_min == 80
     assert by_id[430].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
     assert by_id[430].extras["role"] == "to_bih"
-    assert "gpt-4o" in by_id[430].detail
+    assert "gpt-5-nano" in by_id[430].detail
     assert by_id[429].severity == "info"  # clear → info
     assert by_id[429].extras["vehicles"] == 1
     assert by_id[429].extras["role"] == "to_hr"
@@ -268,7 +268,7 @@ def test_dashboard_embeds_cameras():
         source="HAK-Cam",
         severity="critical",
         title="Kamera: Maljevac — Ausreise HR → BiH",
-        detail="Lange Kolonne | KI: gpt-4o-mini",
+        detail="Lange Kolonne | KI: gpt-5-nano",
         location="Maljevac — Ausreise HR → BiH",
         delay_min=80,
         extras={"vehicles": 22, "trucks": 2, "weather": "sunny", "road": "dicht", "role": "to_bih"},
@@ -277,7 +277,7 @@ def test_dashboard_embeds_cameras():
         source="HAK-Cam",
         severity="warning",
         title="Kamera: Maljevac — Einreise BiH → HR",
-        detail="Mittlere Kolonne | KI: gpt-4o-mini",
+        detail="Mittlere Kolonne | KI: gpt-5-nano",
         location="Maljevac — Einreise BiH → HR",
         delay_min=25,
         extras={"vehicles": 7, "trucks": 0, "weather": "sunny", "road": "flüssig", "role": "to_hr"},

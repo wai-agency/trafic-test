@@ -3,7 +3,7 @@
 The live camera JPEGs live under ``https://m.hak.hr/cam.asp?id=<id>``. They are
 always surfaced in the dashboard (no key needed). When an ``OPENAI_API_KEY`` is
 configured, each analysed camera image is sent to OpenAI vision
-(default ``gpt-4o``) to estimate queue length / wait time and enrich routing.
+(default ``gpt-5-nano``) to estimate queue length / wait time and enrich routing.
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from traffic_monitor.models import Alert
 console = Console()
 
 HAK_REFERER = "https://m.hak.hr/"
-DEFAULT_MODEL = "gpt-4o"
+DEFAULT_MODEL = "gpt-5-nano"
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 8
+_PROMPT_VERSION = 9
 
 _PROMPT = (
     "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
@@ -347,9 +347,8 @@ def _analyze_with_openai(
 ) -> dict | None:
     b64 = base64.b64encode(image).decode("ascii")
     prompt = _PROMPT + f"\nKamera: {name}. Fahrtrichtung: {direction or 'unbekannt'}."
-    body = {
+    body: dict = {
         "model": model,
-        "temperature": 0,
         "response_format": {"type": "json_object"},
         "messages": [
             {
@@ -368,6 +367,15 @@ def _analyze_with_openai(
             }
         ],
     }
+    # GPT-5 family rejects non-default temperature; older models accept 0.
+    if not model.startswith("gpt-5"):
+        body["temperature"] = 0
+    else:
+        # Keep nano cheap/fast for classification-style queue counting
+        body["reasoning_effort"] = "minimal"
+        # Reasoning tokens count toward this limit — keep headroom for JSON
+        body["max_completion_tokens"] = 2000
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -377,6 +385,12 @@ def _analyze_with_openai(
         time.sleep(8)
         resp = client.post(OPENAI_CHAT_URL, headers=headers, json=body)
     if resp.status_code >= 400:
+        # Retry once without optional GPT-5-only knobs if the API rejects them
+        if model.startswith("gpt-5") and resp.status_code == 400:
+            body.pop("reasoning_effort", None)
+            body.pop("max_completion_tokens", None)
+            resp = client.post(OPENAI_CHAT_URL, headers=headers, json=body)
+    if resp.status_code >= 400:
         raise ValueError(f"OpenAI {resp.status_code}: {resp.text[:240]}")
     return parse_vision_response(resp.json())
 
@@ -384,8 +398,16 @@ def _analyze_with_openai(
 def parse_vision_response(data: dict) -> dict | None:
     """Extract and normalise the verdict from an OpenAI chat.completions response."""
     try:
-        text = data["choices"][0]["message"]["content"]
+        message = data["choices"][0]["message"]
+        text = message.get("content")
+        # Some reasoning models may return content as a list of parts
+        if isinstance(text, list):
+            text = "".join(
+                part.get("text", "") if isinstance(part, dict) else str(part) for part in text
+            )
     except (KeyError, IndexError, TypeError):
+        return None
+    if not text:
         return None
     return normalize_verdict(text)
 

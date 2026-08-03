@@ -82,7 +82,7 @@ nakordoni:
 hak_cameras:
   page: "https://m.hak.hr/kamera.asp?g=2&k=177"
   # OpenAI vision model for queue counting. Override via OPENAI_VISION_MODEL env.
-  model: gpt-4o
+  model: gpt-5-nano
   # Only alert from AI verdicts at/above this severity.
   analyze_min_severity: warning
   cams:

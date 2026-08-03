@@ -23,7 +23,7 @@ def _base_payload(**overrides):
             "name": "Maljevac",
             "cars": 10,
             "wait_min": 15,
-            "source": "HAK-Cam · gpt-4o",
+            "source": "HAK-Cam · gpt-5-nano",
             "note": "Live gezählt von HAK-Kameras (OpenAI Vision)",
             "stale": False,
             "trucks": 1,
