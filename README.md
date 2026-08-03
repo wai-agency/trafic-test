@@ -75,7 +75,7 @@ docker compose up -d --build
 
 ### In der Cloud ohne PC (GitHub Actions + mobiles Dashboard)
 
-Der Workflow prüft **alle 20 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages. OpenAI Vision (gpt-5.6-terra) wertet die HAK-Kameras aus (HD-Stills von `www.hak.hr/info/kamere`, ~1280×720) und cached die Zählung ~20 Min.
+Der Workflow prüft **alle 20 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages. Das Dashboard lädt HAK-Kamerabilder **live (~alle 10s)** von `www.hak.hr/info/kamere` (HD ~1280×720); OpenAI Vision (gpt-5.6-terra) zählt die Kolonne nur **~alle 20 Min**.
 
 1. Secrets (erledigt, wenn gesetzt):  
    https://github.com/wai-agency/trafic-test/settings/secrets/actions  

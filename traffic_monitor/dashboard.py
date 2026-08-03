@@ -1173,7 +1173,7 @@ def render_html(payload: dict) -> str:
 
     {perfect_html}
 
-    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Snapshot mit KI-Auswertung (~alle 20 Min) · Tippen zeigt dasselbe Bild größer</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
+    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Bild live ~alle 10s · KI-Zählung ~alle 20 Min · Tippen vergrößert das aktuelle Live-Bild</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
 
     <section aria-labelledby="route-title">
       <h2 id="route-title">Route</h2>
@@ -1197,7 +1197,7 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Auto-Refresh alle 20 Min · Perfect + HAK-Kameras + OpenAI Vision (Terra)</footer>
+    <footer>BuzimLine · Kameras live · KI alle 20 Min · Perfect + HAK HD + OpenAI Vision (Terra)</footer>
   </main>
   <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
     <div class="lightbox-inner">
@@ -1210,21 +1210,44 @@ def render_html(payload: dict) -> str:
   <script>
     const mins = 20;
     setTimeout(() => location.reload(), mins * 60 * 1000);
-    // Soft live refresh of HAK camera stills
-    setInterval(() => {{
-      document.querySelectorAll('img[data-cam]').forEach((img) => {{
-        const base = img.dataset.cam;
-        if (!base) return;
-        const sep = base.includes('?') ? '&' : '?';
-        img.src = base + sep + 't=' + Date.now();
-      }});
-      const lb = document.getElementById('cam-lightbox-img');
-      if (lb && lb.dataset.cam && document.getElementById('cam-lightbox').classList.contains('open')) {{
-        const base = lb.dataset.cam;
-        const sep = base.includes('?') ? '&' : '?';
-        lb.src = base + sep + 't=' + Date.now();
+
+    // Live HAK stills on the dashboard (~10s). KI analysis stays on the 20-min server cycle.
+    (function liveCameraFeed() {{
+      const REFRESH_MS = 10000;
+
+      function bust(url) {{
+        if (!url) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return url + sep + 't=' + Date.now();
       }}
-    }}, 60000);
+
+      function setLive(img, url) {{
+        if (!img || !url) return;
+        const next = new Image();
+        next.onload = () => {{ img.src = next.src; }};
+        next.onerror = () => {{
+          const snap = img.dataset.snap;
+          if (snap && !img.src.includes(snap.split('?')[0])) {{
+            img.src = snap;
+          }}
+        }};
+        next.src = bust(url);
+      }}
+
+      function refreshAll() {{
+        document.querySelectorAll('img[data-cam]').forEach((img) => {{
+          setLive(img, img.dataset.cam);
+        }});
+        const box = document.getElementById('cam-lightbox');
+        const lb = document.getElementById('cam-lightbox-img');
+        if (lb && lb.dataset.cam && box && box.classList.contains('open')) {{
+          setLive(lb, lb.dataset.cam);
+        }}
+      }}
+
+      refreshAll();
+      setInterval(refreshAll, REFRESH_MS);
+    }})();
 
     (function cameraLightbox() {{
       const box = document.getElementById('cam-lightbox');
@@ -1236,12 +1259,17 @@ def render_html(payload: dict) -> str:
       function openCam(btn) {{
         const thumb = btn.querySelector('img[data-cam]');
         if (!thumb) return;
-        // Always enlarge the frame currently shown on the card (not a different live URL).
-        const shown = thumb.currentSrc || thumb.src;
-        const base = thumb.dataset.cam || shown;
-        img.src = shown;
-        img.dataset.cam = base;
+        // Enlarge the live feed (same base as the card), with a fresh cache-bust.
+        const live = thumb.dataset.cam || thumb.currentSrc || thumb.src;
+        const sep = live.includes('?') ? '&' : '?';
+        img.src = live + sep + 't=' + Date.now();
+        img.dataset.cam = thumb.dataset.cam || live;
+        img.dataset.snap = thumb.dataset.snap || '';
         img.alt = thumb.alt || 'Kamera';
+        img.onerror = () => {{
+          const shown = thumb.currentSrc || thumb.src;
+          if (shown) img.src = shown;
+        }};
         caption.textContent = btn.dataset.camTitle || thumb.alt || '';
         box.hidden = false;
         box.classList.add('open');
@@ -1255,6 +1283,7 @@ def render_html(payload: dict) -> str:
         box.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
         img.removeAttribute('src');
+        img.onerror = null;
       }}
 
       document.querySelectorAll('button.cam[data-cam-open]').forEach((btn) => {{
@@ -1474,9 +1503,10 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
 def _camera_card(cam: dict) -> str:
     name = html.escape(cam.get("name") or "")
     direction = html.escape(cam.get("direction") or "")
-    # Thumbnail and lightbox must share the same frame (local snapshot preferred).
-    img = html.escape(cam.get("image_url") or "")
-    live = html.escape(cam.get("image_url") or cam.get("live_url") or "")
+    # Live HD feed for display; optional local snapshot as fast/offline fallback.
+    live = html.escape(cam.get("live_url") or cam.get("image_url") or "")
+    snap = html.escape(cam.get("snapshot_url") or "")
+    img = live or snap
     relevant = " relevant" if cam.get("relevant") else ""
     severity = cam.get("severity")
     sev_label = "frei" if severity == "info" else (severity or "")
@@ -1514,10 +1544,11 @@ def _camera_card(cam: dict) -> str:
         if verdict
         else ""
     )
+    snap_attr = f' data-snap="{snap}"' if snap else ""
     return f"""
     <button type="button" class="cam{relevant}" data-cam-open data-cam-title="{name}" aria-label="Kamera vergrößern: {name}">
       <div class="cam-media">
-        <img src="{img}" data-cam="{live}" alt="HAK Kamera {name}" loading="lazy" />
+        <img src="{img}" data-cam="{live}"{snap_attr} alt="HAK Kamera {name}" loading="lazy" />
         <span class="cam-zoom">Tippen · größer</span>
       </div>
       <span class="cam-body">
@@ -1562,15 +1593,17 @@ def write_dashboard(
     alerts = fetch_all(config)
     perfect = load_perfect_json(out / "perfect.json")
     payload = _payload_from_alerts(config, alerts, perfect=perfect)
-    # Snapshot live JPEGs so GitHub Pages always shows a fresh still
+    # Snapshot for offline fallback; dashboard display soft-refreshes from live HD URL.
     snaps = snapshot_cameras(config, out)
     if snaps:
         for cam in payload.get("cameras") or []:
+            live = cam.get("live_url") or cam.get("image_url")
             local = snaps.get(cam.get("id"))
+            if live:
+                cam["live_url"] = live
+                cam["image_url"] = live
             if local:
-                # Keep card, lightbox, and soft-refresh on the same still the KI saw.
-                cam["image_url"] = local
-                cam["live_url"] = local
+                cam["snapshot_url"] = local
     html_path = out / "index.html"
     html_path.write_text(render_html(payload), encoding="utf-8")
     (out / "status.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

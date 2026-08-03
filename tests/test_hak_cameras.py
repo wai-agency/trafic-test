@@ -437,13 +437,18 @@ def test_dashboard_embeds_cameras():
     assert 'data-cam-open' in html_out
     assert 'id="cam-lightbox"' in html_out
     assert "Tippen · größer" in html_out
-    assert "thumb.currentSrc || thumb.src" in html_out
-    assert "dasselbe Bild" in html_out
-    # Card thumbnail and data-cam base must be the same URL (no live/HAK mismatch).
+    assert "liveCameraFeed" in html_out
+    assert "REFRESH_MS = 10000" in html_out
+    assert "KI-Zählung ~alle 20 Min" in html_out
+    assert "Bild live ~alle 10s" in html_out
+    # Live feed base must be the HD HAK URL (not only a frozen local snapshot).
+    assert "https://www.hak.hr/info/kamere/430.jpg" in html_out
     import re
 
     for m in re.finditer(
-        r'<img src="([^"]+)" data-cam="([^"]+)" alt="HAK Kamera',
+        r'<img src="([^"]+)" data-cam="([^"]+)"(?: data-snap="([^"]*)")? alt="HAK Kamera',
         html_out,
     ):
-        assert m.group(1) == m.group(2), (m.group(1), m.group(2))
+        src, live, snap = m.group(1), m.group(2), m.group(3)
+        assert "www.hak.hr/info/kamere" in live
+        assert src == live or (snap and src == snap)
