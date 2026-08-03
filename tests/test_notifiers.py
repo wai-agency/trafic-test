@@ -47,7 +47,7 @@ def test_telegram_appends_dashboard_link(monkeypatch):
         title="Kamera: Maljevac",
         detail="~10 Autos",
         location="Maljevac",
-        url="https://m.hak.hr/cam.asp?id=430",
+        url="https://www.hak.hr/info/kamere/430.jpg",
     )
     TelegramNotifier("tok", "123").send(alert)
     text = sent["json"]["text"]

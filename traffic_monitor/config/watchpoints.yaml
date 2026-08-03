@@ -77,10 +77,12 @@ nakordoni:
     - Litscho Petrowo Selo
     - Petrovo Selo
 
-# HAK live border cameras (m.hak.hr). Always embedded in the dashboard.
-# AI queue analysis (OpenAI vision) runs only when OPENAI_API_KEY is set.
+# HAK live border cameras. Still frames from desktop videowall (HD 1280×720);
+# mobile page is linked for humans. AI queue analysis needs OPENAI_API_KEY.
 hak_cameras:
   page: "https://m.hak.hr/kamera.asp?g=2&k=177"
+  # HD JPEGs (www.hak.hr) — sharper than m.hak.hr/cam.asp (640×360).
+  image_base: "https://www.hak.hr/info/kamere"
   # OpenAI vision model for queue counting. Override via OPENAI_VISION_MODEL env.
   # Higher-quality GPT-5.6 Terra for queue counting. Override via OPENAI_VISION_MODEL.
   # Vision JPEGs are cached ~20 min (see hak_cameras._CACHE_TTL_SEC).

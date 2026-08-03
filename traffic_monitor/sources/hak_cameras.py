@@ -1,9 +1,10 @@
 """HAK (Croatian Auto Club) border cameras with optional OpenAI vision analysis.
 
-The live camera JPEGs live under ``https://m.hak.hr/cam.asp?id=<id>``. They are
-always surfaced in the dashboard (no key needed). When an ``OPENAI_API_KEY`` is
-configured, each analysed camera image is sent to OpenAI vision
-(default ``gpt-5.6-terra``) to estimate queue length / wait time and enrich routing.
+Still-frame JPEGs come from the desktop HAK videowall
+(``https://www.hak.hr/info/kamere/<id>.jpg``, typically 1280×720). The mobile
+page ``https://m.hak.hr/kamera.asp?...`` only serves 640×360 via ``cam.asp``.
+Dashboard always embeds snapshots (no key needed). With ``OPENAI_API_KEY``,
+images are sent to OpenAI vision (default ``gpt-5.6-terra``) for queue length.
 """
 
 from __future__ import annotations
@@ -22,7 +23,10 @@ from traffic_monitor.models import Alert
 
 console = Console()
 
-HAK_REFERER = "https://m.hak.hr/"
+# Desktop videowall stills are sharper than m.hak.hr/cam.asp (640×360).
+HAK_IMAGE_BASE = "https://www.hak.hr/info/kamere"
+HAK_REFERER = "https://www.hak.hr/info/kamere/"
+HAK_MOBILE_PAGE = "https://m.hak.hr/kamera.asp?g=2&k=177"
 DEFAULT_MODEL = "gpt-5.6-terra"
 # Fallbacks if Terra refuses / returns empty (keep a classic vision model in the chain)
 FALLBACK_MODELS = ("gpt-4o-mini", "gpt-4o")
@@ -30,8 +34,8 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
-# Bump when vision prompt / post-processing / model cadence changes.
-_PROMPT_VERSION = 16
+# Bump when vision prompt / post-processing / model cadence / image source changes.
+_PROMPT_VERSION = 17
 
 # Reuse OpenAI vision results ~20 min so scheduled runs do not re-upload JPEGs every cycle.
 _CACHE_TTL_SEC = 20 * 60
@@ -70,13 +74,20 @@ _PROMPT = (
 
 
 def camera_image_url(cam_id: object) -> str:
-    return f"https://m.hak.hr/cam.asp?id={cam_id}"
+    """HD still from www.hak.hr videowall (usually 1280×720)."""
+    return f"{HAK_IMAGE_BASE}/{cam_id}.jpg"
+
+
+def camera_mobile_page_url(cam_id: object | None = None) -> str:
+    """Mobile HAK camera group page (Maljevac / Velika Kladuša)."""
+    return HAK_MOBILE_PAGE
 
 
 def cameras_from_config(config: dict) -> list[dict]:
     """Normalised camera list for the dashboard (independent of the AI key)."""
     hak = config.get("hak_cameras") or {}
     cams = hak.get("cams") or []
+    image_base = str(hak.get("image_base") or HAK_IMAGE_BASE).rstrip("/")
     out: list[dict] = []
     for cam in cams:
         cam_id = cam.get("id")
@@ -89,7 +100,8 @@ def cameras_from_config(config: dict) -> list[dict]:
                 "direction": str(cam.get("direction") or ""),
                 "relevant": bool(cam.get("relevant", False)),
                 "role": str(cam.get("role") or ""),
-                "image_url": camera_image_url(cam_id),
+                "image_url": f"{image_base}/{cam_id}.jpg",
+                "page_url": str(hak.get("page") or HAK_MOBILE_PAGE),
             }
         )
     return out
@@ -102,11 +114,16 @@ def snapshot_cameras(config: dict, out_dir: str | Path) -> dict[int | str, str]:
     cams_dir.mkdir(parents=True, exist_ok=True)
     stamp = int(time.time())
     mapping: dict[int | str, str] = {}
-    with httpx.Client(timeout=25.0, headers={"User-Agent": "stuttgart-buzim-traffic/1.0"}) as client:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; BuzimLine/1.0; +https://github.com/wai-agency/trafic-test)",
+        "Referer": HAK_REFERER,
+        "Accept": "image/jpeg,image/*;q=0.8,*/*;q=0.5",
+    }
+    with httpx.Client(timeout=25.0, headers=headers, follow_redirects=True) as client:
         for cam in cameras_from_config(config):
             cam_id = cam["id"]
             try:
-                data = _download_image(client, cam_id)
+                data = _download_image(client, cam_id, image_url=cam.get("image_url"))
             except (httpx.HTTPError, ValueError):
                 continue
             path = cams_dir / f"{cam_id}.jpg"
@@ -208,7 +225,8 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
         return _alerts_from_cache(cached)
 
     model = env("OPENAI_VISION_MODEL", hak.get("model") or DEFAULT_MODEL) or DEFAULT_MODEL
-    page = str(hak.get("page") or HAK_REFERER)
+    page = str(hak.get("page") or HAK_MOBILE_PAGE)
+    image_base = str(hak.get("image_base") or HAK_IMAGE_BASE).rstrip("/")
 
     to_analyze = []
     for cam in cams:
@@ -219,14 +237,21 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
             to_analyze.append(cam)
 
     alerts: list[Alert] = []
-    with httpx.Client(timeout=60.0, headers={"User-Agent": "stuttgart-buzim-traffic/1.0"}) as client:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; BuzimLine/1.0; +https://github.com/wai-agency/trafic-test)",
+        "Referer": HAK_REFERER,
+        "Accept": "image/jpeg,image/*;q=0.8,*/*;q=0.5",
+    }
+    with httpx.Client(timeout=60.0, headers=headers, follow_redirects=True) as client:
         for cam in to_analyze:
             cam_id = cam.get("id")
             name = str(cam.get("name") or f"HAK Kamera {cam_id}")
             direction = cam.get("direction", "")
             hint = str(cam.get("count_hint") or "")
             try:
-                image = _download_image(client, cam_id)
+                image = _download_image(
+                    client, cam_id, image_url=f"{image_base}/{cam_id}.jpg"
+                )
                 verdict, used_model = _analyze_with_fallback(
                     client, image, api_key, model, name, direction, count_hint=hint
                 )
@@ -282,11 +307,11 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                     title=f"Kamera: {name}",
                     detail=" | ".join(detail_bits),
                     location=name,
-                    url=camera_image_url(cam_id),
+                    url=page,
                     event_id=f"hakcam:{cam_id}:{severity}:{(wait or 0) // 15}",
                     delay_min=wait,
                     extras={
-                        "image_url": camera_image_url(cam_id),
+                        "image_url": f"{image_base}/{cam_id}.jpg",
                         "page_url": page,
                         "direction": str(cam.get("direction") or ""),
                         "cam_id": cam_id,
@@ -332,13 +357,25 @@ def maljevac_cam_wait_min(alerts: list[Alert]) -> int | None:
     return max(waits) if waits else None
 
 
-def _download_image(client: httpx.Client, cam_id: object) -> bytes:
-    resp = client.get(camera_image_url(cam_id), headers={"Referer": HAK_REFERER})
+def _download_image(
+    client: httpx.Client,
+    cam_id: object,
+    *,
+    image_url: str | None = None,
+) -> bytes:
+    url = image_url or camera_image_url(cam_id)
+    # Cache-bust so we do not reuse a CDN-stale frame for vision / snapshots.
+    sep = "&" if "?" in url else "?"
+    resp = client.get(f"{url}{sep}t={int(time.time())}", headers={"Referer": HAK_REFERER})
     resp.raise_for_status()
     ctype = resp.headers.get("content-type", "")
     if "image" not in ctype.lower():
         raise ValueError(f"unexpected content-type: {ctype!r}")
-    return resp.content
+    data = resp.content
+    # Prefer HD (≥720p). Mobile cam.asp is 640×360 — reject tiny frames if possible.
+    if len(data) < 20_000:
+        raise ValueError(f"image too small ({len(data)} bytes) from {url}")
+    return data
 
 
 def _analyze_with_fallback(

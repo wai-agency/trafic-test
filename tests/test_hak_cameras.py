@@ -234,8 +234,10 @@ def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Kolonne" in hc._PROMPT
     assert "einzeln" in hc._PROMPT.lower() or "Auto fuer Auto" in hc._PROMPT
-    assert hc._PROMPT_VERSION >= 16
+    assert hc._PROMPT_VERSION >= 17
     assert hc.DEFAULT_MODEL == "gpt-5.6-terra"
+    assert "www.hak.hr/info/kamere" in hc.camera_image_url(430)
+    assert hc.camera_image_url(430).endswith("/430.jpg")
     assert hc._CACHE_TTL_SEC >= 20 * 60
     assert "gpt-4o-mini" in hc.FALLBACK_MODELS
 
@@ -298,7 +300,7 @@ def test_no_api_key_no_alerts(monkeypatch):
 def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(hc, "_CACHE_PATH", tmp_path / "cam_cache.json")
-    monkeypatch.setattr(hc, "_download_image", lambda client, cam_id: b"\xff\xd8\xff")
+    monkeypatch.setattr(hc, "_download_image", lambda client, cam_id, **_kw: b"\xff\xd8\xff")
 
     verdicts = {
         430: {
@@ -335,7 +337,7 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
     by_id = {a.extras["cam_id"]: a for a in alerts}
     assert by_id[430].severity == "critical"
     assert by_id[430].delay_min == 80
-    assert by_id[430].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
+    assert by_id[430].extras["image_url"] == "https://www.hak.hr/info/kamere/430.jpg"
     assert by_id[430].extras["role"] == "to_bih"
     assert "gpt-5.6-terra" in by_id[430].detail
     assert by_id[429].severity == "info"  # clear → info
@@ -384,7 +386,8 @@ def test_cameras_from_config():
     assert cams[0]["relevant"] is True
     assert cams[0]["role"] == "to_bih"
     assert cams[1]["role"] == "to_hr"
-    assert cams[0]["image_url"].endswith("id=430")
+    assert cams[0]["image_url"].endswith("/430.jpg")
+    assert "www.hak.hr/info/kamere" in cams[0]["image_url"]
 
 
 def test_dashboard_embeds_cameras():
@@ -426,7 +429,8 @@ def test_dashboard_embeds_cameras():
 
     html_out = render_html(payload)
     assert "Grenz-Kameras" in html_out
-    assert "https://m.hak.hr/cam.asp?id=430" in html_out
+    assert "https://www.hak.hr/info/kamere/430.jpg" in html_out
+    assert "https://m.hak.hr/kamera.asp" in html_out or "Grenz-Kameras" in html_out
     assert "Einfahrt BiH (HR → BiH)" in html_out
     assert "Einfahrt HR (BiH → HR)" in html_out
     assert "data-cam=" in html_out
