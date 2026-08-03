@@ -1212,7 +1212,7 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Kameras live · KI/Perfect per GitHub Actions (oft verzögert) · HAK HD + OpenAI Vision (Terra)</footer>
+    <footer>BuzimLine · Kameras live · KI/Perfect ~alle 20 Min (Requeue-Loop) · HAK HD + OpenAI Vision (Terra)</footer>
   </main>
   <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
     <div class="lightbox-inner">
@@ -1246,7 +1246,7 @@ def render_html(payload: dict) -> str:
         stamp.classList.add('is-stale');
         banner.classList.add('is-visible');
         banner.innerHTML = '<strong>Daten veraltet</strong> · letzter Monitor-Lauf vor '
-          + ageMin + ' Min. GitHub Actions-Cron verzögert oft. '
+          + ageMin + ' Min. Requeue-Loop oder Cron hat Lücke. '
           + 'Kamerabilder unten sind trotzdem live. '
           + 'Frisch laden: Actions → Traffic Monitor → Run workflow.';
       }}
