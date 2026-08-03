@@ -105,6 +105,59 @@ def test_missing_queue_end_defaults_to_worst_case():
     assert v["vehicles"] <= 20
 
 
+def test_queue_sev_six_cars_end_visible_is_clear():
+    from traffic_monitor.dashboard import _queue_sev_key
+
+    assert (
+        _queue_sev_key(
+            {
+                "cars": 6,
+                "wait_min": 15,
+                "queue_end_visible": True,
+                "severity": "warning",
+            }
+        )
+        == "clear"
+    )
+    assert (
+        _queue_sev_key(
+            {
+                "cars": 6,
+                "wait_min": 15,
+                "queue_end_visible": False,
+                "severity": "warning",
+            }
+        )
+        == "critical"
+    )
+
+
+def test_normalize_six_cars_visible_end_not_critical():
+    v = hc.normalize_verdict(
+        {
+            "vehicles": 6,
+            "wait_min": 15,
+            "severity": "critical",
+            "road": "flüssig",
+            "summary": "Sechs Autos, Ende klar",
+            "queue_end_visible": True,
+        }
+    )
+    assert v["queue_end_visible"] is True
+    assert v["severity"] in {"clear", "warning"}
+    assert v["severity"] != "critical"
+
+
+def test_timeline_load_six_cars_still_ok():
+    """~6 forecast cars should be orange (ok), not red (voll)."""
+    cars = 6.0
+    load = "frei" if cars <= 3.0 else ("ok" if cars <= 6.0 else "voll")
+    assert load == "ok"
+    cars = 6.1
+    load = "frei" if cars <= 3.0 else ("ok" if cars <= 6.0 else "voll")
+    assert load == "voll"
+
+
 def test_queue_end_visible_keeps_modest_count():
     v = hc.normalize_verdict(
         {
@@ -181,7 +234,7 @@ def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Kolonne" in hc._PROMPT
     assert "einzeln" in hc._PROMPT.lower() or "Auto fuer Auto" in hc._PROMPT
-    assert hc._PROMPT_VERSION >= 15
+    assert hc._PROMPT_VERSION >= 16
     assert hc.DEFAULT_MODEL == "gpt-5.6-terra"
     assert hc._CACHE_TTL_SEC >= 20 * 60
     assert "gpt-4o-mini" in hc.FALLBACK_MODELS
@@ -226,8 +279,10 @@ def test_parse_bad_severity_defaults_warning():
     v = hc.parse_vision_response(
         _openai_payload('{"vehicles": 3, "severity": "banana", "queue_end_visible": true}')
     )
-    assert v["severity"] == "warning"
+    # Invalid severity → warning, then short visible queue is treated as clear.
+    assert v["severity"] == "clear"
     assert v["wait_min"] is None
+    assert v["queue_end_visible"] is True
 
 
 def test_parse_garbage_returns_none():

@@ -1341,26 +1341,37 @@ def render_html(payload: dict) -> str:
 
 
 def _queue_sev_key(side: dict | None) -> str:
-    """Map a Maljevac side payload to a UI severity key."""
+    """Map a Maljevac side payload to a UI severity key.
+
+    ~6 Autos mit sichtbarem Kolonnenende gelten noch als ok (nicht rot).
+    Rot/Stau vor allem wenn das Ende nicht sichtbar ist (oder wirklich lange Warteschlange).
+    """
     if not side:
         return "empty"
-    sev = (side.get("severity") or "").lower()
-    if sev == "critical":
-        return "critical"
-    if sev == "warning":
-        return "warning"
-    if sev in {"clear", "info"}:
-        return "clear"
     wait = side.get("wait_min")
     cars = side.get("cars")
+    end_visible = side.get("queue_end_visible")
+    # Primary signal: cut-off queue → Stau (red)
+    if end_visible is False:
+        return "critical"
+    # ~6 Autos + Ende sichtbar: noch ok, auch wenn das Modell "warning" sagt
+    if end_visible is True and cars is not None and cars <= 6 and (wait is None or wait < 30):
+        return "clear"
+    sev = (side.get("severity") or "").lower()
+    if sev == "critical" and end_visible is not True:
+        return "critical"
     if wait is not None and wait >= 45:
         return "critical"
     if cars is not None and cars >= 20:
         return "critical"
-    if wait is not None and wait >= 15:
+    if sev == "warning":
         return "warning"
-    if cars is not None and cars >= 5:
+    if wait is not None and wait >= 20:
         return "warning"
+    if cars is not None and cars > 6:
+        return "warning"
+    if sev in {"clear", "info"}:
+        return "clear"
     if cars is not None or wait is not None:
         return "clear"
     return "empty"

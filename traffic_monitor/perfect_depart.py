@@ -353,7 +353,8 @@ def compute_perfect_payload() -> dict:
     primary.sort(key=lambda s: s.depart)
     timeline = []
     for s in primary:
-        load = "frei" if s.border_cars <= 3.0 else ("ok" if s.border_cars <= 5.0 else "voll")
+        # ~6 Autos noch ok (orange); rot erst darüber bzw. wirklich voll.
+        load = "frei" if s.border_cars <= 3.0 else ("ok" if s.border_cars <= 6.0 else "voll")
         night = s.depart.hour <= 5
         timeline.append(
             {

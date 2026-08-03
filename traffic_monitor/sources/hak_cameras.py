@@ -31,7 +31,7 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing / model cadence changes.
-_PROMPT_VERSION = 15
+_PROMPT_VERSION = 16
 
 # Reuse OpenAI vision results ~20 min so scheduled runs do not re-upload JPEGs every cycle.
 _CACHE_TTL_SEC = 20 * 60
@@ -63,7 +63,9 @@ _PROMPT = (
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
     "\"summary\": \"<kurz deutsch>\" "
     "}.\n"
-    "Severity: <5 clear, 5–20 warning, >20 critical. Wartezeit ~2–3 min/Auto."
+    "Severity: queue_end_visible=false → critical; "
+    "Ende sichtbar und <=6 Autos → clear/warning; >20 Autos → critical. "
+    "Wartezeit ~2–3 min/Auto."
 )
 
 
@@ -574,10 +576,12 @@ def normalize_verdict(text: str | dict) -> dict | None:
         if "aufschlag" not in summary.lower() and "ende nicht" not in summary.lower():
             out["summary"] = f"{summary} {note}".strip() if summary else note
 
-    # Severity for short visible queues when end is visible
+    # ~6 Autos mit sichtbarem Ende: noch ok, nicht als Stau markieren.
     if end_visible and cars is not None:
-        if cars < 5 and out["severity"] == "critical" and road not in ("dicht", "gesperrt"):
-            out["severity"] = "clear" if cars <= 2 else "warning"
+        if cars <= 6 and out["severity"] == "critical" and road not in ("dicht", "gesperrt"):
+            out["severity"] = "clear" if cars <= 3 else "warning"
+        elif cars <= 3 and out.get("severity") == "warning" and road not in ("dicht", "stockend", "gesperrt"):
+            out["severity"] = "clear"
 
     return out
 
