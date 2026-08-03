@@ -12,5 +12,3 @@ build/
 data/
 .traffic_alert_state.json
 .DS_Store
-*.egg-info/
-.pytest_cache/
