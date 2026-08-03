@@ -86,7 +86,7 @@ def detect_blockers(alerts: list[Alert]) -> set[str]:
         heavy_border = alert.source.lower() == "nakordoni" and (alert.delay_min or 0) >= 45
         critical = alert.severity == "critical" or heavy_border
 
-        if any(k in text for k in ("karawan", "karavanke", "a11")) and critical:
+        if any(k in text for k in ("karawan", "karavan", "a11")) and critical:
             blockers.add("karawanken")
         if any(k in text for k in ("tauern", "katschberg", "a10")) and critical:
             blockers.add("tauern")
