@@ -169,15 +169,17 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
     if not cams:
         return []
 
-    cached = _load_cache()
-    if cached:
-        n = len(cached.get("alerts") or [])
-        console.print(f"[dim]HAK-Cam: Cache ({n} verdicts)[/dim]")
-        return _alerts_from_cache(cached)
-
     api_key = env("OPENAI_API_KEY")
     if not api_key:
+        console.print("[yellow]HAK-Cam: OPENAI_API_KEY fehlt — nur Live-Bilder[/yellow]")
         return []
+
+    cached = _load_cache()
+    # Only reuse cache when it has real verdicts (empty = previous rate-limit cooldown)
+    if cached and cached.get("alerts"):
+        n = len(cached["alerts"])
+        console.print(f"[dim]HAK-Cam: Cache ({n} verdicts)[/dim]")
+        return _alerts_from_cache(cached)
 
     model = env("OPENAI_VISION_MODEL", hak.get("model") or DEFAULT_MODEL) or DEFAULT_MODEL
     page = str(hak.get("page") or HAK_REFERER)

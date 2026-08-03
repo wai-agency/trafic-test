@@ -57,8 +57,9 @@ jobs:
           path: |
             .traffic_alert_state.json
             .camera_ai_cache.json
-          key: traffic-alert-state-${{ github.run_id }}
+          key: traffic-state-v2-${{ github.run_id }}
           restore-keys: |
+            traffic-state-v2-
             traffic-alert-state-
 
       - name: Run monitor
