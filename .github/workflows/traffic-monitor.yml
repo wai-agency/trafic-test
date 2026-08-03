@@ -21,6 +21,11 @@ on:
         required: false
         default: false
         type: boolean
+      depart_advice:
+        description: "Beste Abfahrt Waiblingen→Bužim berechnen + Telegram"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: traffic-monitor
@@ -74,7 +79,11 @@ jobs:
 
           traffic-monitor check --min-severity "$MIN_SEVERITY" --notify --state .traffic_alert_state.json
 
-          if [ "$FORCE_NOTIFY" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event.inputs.depart_advice }}" = "true" ] || [[ "${{ github.event.head_commit.message }}" == *"[depart]"* ]]; then
+            traffic-monitor depart --notify
+          fi
+
+          if [ "$FORCE_NOTIFY" = "true" ]; then
             python - <<'PY'
           import os, httpx
           token = os.environ["TELEGRAM_BOT_TOKEN"]

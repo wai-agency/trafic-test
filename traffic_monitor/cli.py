@@ -5,6 +5,7 @@ import sys
 
 from traffic_monitor import __version__
 from traffic_monitor.dashboard import serve_dashboard, write_dashboard
+from traffic_monitor.depart import advise_today
 from traffic_monitor.monitor import run_once, watch
 from traffic_monitor.recommend import print_travel_plan
 
@@ -49,10 +50,14 @@ def build_parser() -> argparse.ArgumentParser:
     dash.add_argument("--host", default="0.0.0.0")
     dash.add_argument("--port", type=int, default=8080)
 
+    dep = sub.add_parser("depart", help="Beste Abfahrt/Route heute (Waiblingen→Bužim)")
+    dep.add_argument("--notify", action="store_true", help="Ergebnis per Telegram senden")
+    dep.add_argument("--console-only", action="store_true")
+
     parser.epilog = """Examples:
   traffic-monitor recommend
+  traffic-monitor depart --notify
   traffic-monitor check --notify
-  traffic-monitor dashboard --out site
   traffic-monitor dashboard --serve
   traffic-monitor watch --interval 300
 """
@@ -91,6 +96,10 @@ def main(argv: list[str] | None = None) -> int:
         write_dashboard(args.out, args.config)
         if args.serve:
             serve_dashboard(args.out, host=args.host, port=args.port)
+        return 0
+
+    if args.command == "depart":
+        advise_today(notify=args.notify or args.console_only, console_only=args.console_only)
         return 0
 
     parser.print_help()
