@@ -1173,7 +1173,7 @@ def render_html(payload: dict) -> str:
 
     {perfect_html}
 
-    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Bild aktualisiert ~alle 60s · KI-Auswertung fließt in Grenzwartezeit &amp; Routing ein</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
+    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Snapshot mit KI-Auswertung (~alle 20 Min) · Tippen zeigt dasselbe Bild größer</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
 
     <section aria-labelledby="route-title">
       <h2 id="route-title">Route</h2>
@@ -1197,7 +1197,7 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Auto-Refresh alle 20 Min · Perfect + HAK-Kameras + OpenAI Vision (Luna)</footer>
+    <footer>BuzimLine · Auto-Refresh alle 20 Min · Perfect + HAK-Kameras + OpenAI Vision (Terra)</footer>
   </main>
   <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
     <div class="lightbox-inner">
@@ -1236,10 +1236,11 @@ def render_html(payload: dict) -> str:
       function openCam(btn) {{
         const thumb = btn.querySelector('img[data-cam]');
         if (!thumb) return;
-        const live = thumb.dataset.cam || thumb.src;
-        const sep = live.includes('?') ? '&' : '?';
-        img.src = live + sep + 't=' + Date.now();
-        img.dataset.cam = live;
+        // Always enlarge the frame currently shown on the card (not a different live URL).
+        const shown = thumb.currentSrc || thumb.src;
+        const base = thumb.dataset.cam || shown;
+        img.src = shown;
+        img.dataset.cam = base;
         img.alt = thumb.alt || 'Kamera';
         caption.textContent = btn.dataset.camTitle || thumb.alt || '';
         box.hidden = false;
@@ -1462,8 +1463,9 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
 def _camera_card(cam: dict) -> str:
     name = html.escape(cam.get("name") or "")
     direction = html.escape(cam.get("direction") or "")
+    # Thumbnail and lightbox must share the same frame (local snapshot preferred).
     img = html.escape(cam.get("image_url") or "")
-    live = html.escape(cam.get("live_url") or cam.get("image_url") or "")
+    live = html.escape(cam.get("image_url") or cam.get("live_url") or "")
     relevant = " relevant" if cam.get("relevant") else ""
     severity = cam.get("severity")
     sev_label = "frei" if severity == "info" else (severity or "")
@@ -1555,7 +1557,9 @@ def write_dashboard(
         for cam in payload.get("cameras") or []:
             local = snaps.get(cam.get("id"))
             if local:
+                # Keep card, lightbox, and soft-refresh on the same still the KI saw.
                 cam["image_url"] = local
+                cam["live_url"] = local
     html_path = out / "index.html"
     html_path.write_text(render_html(payload), encoding="utf-8")
     (out / "status.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

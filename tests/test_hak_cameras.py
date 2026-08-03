@@ -378,3 +378,13 @@ def test_dashboard_embeds_cameras():
     assert 'data-cam-open' in html_out
     assert 'id="cam-lightbox"' in html_out
     assert "Tippen · größer" in html_out
+    assert "thumb.currentSrc || thumb.src" in html_out
+    assert "dasselbe Bild" in html_out
+    # Card thumbnail and data-cam base must be the same URL (no live/HAK mismatch).
+    import re
+
+    for m in re.finditer(
+        r'<img src="([^"]+)" data-cam="([^"]+)" alt="HAK Kamera',
+        html_out,
+    ):
+        assert m.group(1) == m.group(2), (m.group(1), m.group(2))
