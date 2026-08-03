@@ -29,38 +29,44 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 3
+_PROMPT_VERSION = 4
 
 _PROMPT = (
     "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien). "
     "Analysiere NUR die angegebene Fahrtrichtung.\n\n"
-    "Zaehlregeln (wichtig):\n"
-    "1) Zaehle ALLE Fahrzeuge in der Schlange — auch kleine, unscharfe, weit hinten "
-    "am Horizont oder am Bildrand. Hintere Autos zaehlen voll mit.\n"
-    "2) Pruefe ob das ENDE der Kolonne sichtbar ist. Wenn die Schlange am oberen/"
-    "hinteren Bildrand weitergeht, Kurve/Huegel verdeckt, oder Autos immer noch "
-    "dichter werden ohne sichtbares Ende → queue_end_visible=false.\n"
-    "3) Wenn queue_end_visible=false: Schaetze die GESAMTE Kolonne (sichtbar + "
-    "unsichtbar hinter dem Bild). vehicles darf NICHT nur die klaren Nahfahrzeuge "
-    "sein. Wartezeit und severity entsprechend hoeher ansetzen.\n"
-    "4) Stau/Kolonne = wartende oder stockende Fahrzeuge in Richtung Grenze, "
-    "nicht nur fliessender Vorbeifahrt-Verkehr quer zur Kamera.\n\n"
+    "Was zaehlen (streng):\n"
+    "1) Nur Fahrzeuge in der AKTIVEN Warteschlange der genannten Richtung "
+    "(Fahrspur Richtung Grenze / Markierung BiH bzw. HR auf dem Bild).\n"
+    "2) Zaehle sichtbare Autos in dieser Spur sorgfaeltig — auch kleine/unscharfe "
+    "hinten in derselben Spur. Ein Auto = 1.\n"
+    "3) NICHT zaehlen: parkende Autos auf Parkplaetzen/am Rand, Gegenrichtung, "
+    "LKW nur als trucks (nicht doppelt in vehicles), Schatten, Gebaeude, "
+    "Fahrzeuge unter dem Dach der Grenzanlage wenn sie nicht klar in der Schlange sind.\n"
+    "4) queue_end_visible=true wenn das Ende der Schlange ODER die Grenzkabine/"
+    "Schranke sichtbar ist und die Spur davor nicht ueber den Bildrand hinaus "
+    "weiter dicht besetzt wirkt. Bei diesem Bildtyp (Kabinen/Dach im Hintergrund "
+    "sichtbar) ist das Ende meist sichtbar → true.\n"
+    "5) queue_end_visible=false NUR wenn die Kolonne klar am Bildrand/Huegel "
+    "abgeschnitten ist und dahinter noch Schlange vermutet werden muss. Dann "
+    "darfst du vehicles leicht erhoehen (sichtbar + vorsichtige Schaetzung), "
+    "aber NICHT verdoppeln oder wild aufblasen. Typisch +20–40%, nicht +100%.\n"
+    "6) vehicles = realistische Anzahl wartender PKW/Transporter in der aktiven "
+    "Schlange (nicht 'alle Autos irgendwo im Bild').\n\n"
     "Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
     "{"
-    "\"vehicles\": <int geschaetzte PKW/Transporter in der gesamten Schlange>, "
-    "\"trucks\": <int LKW sichtbar>, "
+    "\"vehicles\": <int wartende PKW/Transporter in der aktiven Schlange>, "
+    "\"trucks\": <int LKW in/neben der Schlange>, "
     "\"wait_min\": <int geschaetzte Wartezeit Minuten>, "
     "\"queue_end_visible\": <true|false>, "
     "\"severity\": \"clear\"|\"warning\"|\"critical\", "
     "\"weather\": \"sunny|cloudy|rain|fog|night|unknown\", "
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
-    "\"summary\": \"<kurze deutsche Lagebeschreibung, erwaehne wenn Kolonnenende nicht sichtbar>\" "
+    "\"summary\": \"<kurze deutsche Lagebeschreibung>\" "
     "}.\n"
-    "Richtwerte severity: unter 5 und Ende sichtbar = clear; "
-    "5-15 oder Ende nicht sichtbar = mindestens warning; "
-    "ueber 15 oder lange unsichtbare Fortsetzung = critical. "
-    "Wenn queue_end_visible=false und mind. einige Autos sichtbar: wait_min mindestens 25. "
-    "Nur wenn wirklich kaum/keine Fahrzeuge und freie Fahrbahn: severity=clear."
+    "Richtwerte: unter 5 und Ende sichtbar = clear; "
+    "5-20 = warning; ueber 20 oder Ende nicht sichtbar mit langer Schlange = critical. "
+    "Wartezeit grob: ~1.5–2.5 min pro Auto in der aktiven Schlange. "
+    "Wenn queue_end_visible=false: wait_min etwas hoeher, aber vehicles bleibt nah am sichtbaren Stand."
 )
 
 
@@ -424,19 +430,19 @@ def normalize_verdict(text: str | dict) -> dict | None:
         if _SEV_RANK.get(out["severity"], 0) < _SEV_RANK["warning"]:
             out["severity"] = "warning"
         wait = out.get("wait_min")
-        if wait is None or wait < 25:
-            out["wait_min"] = 25
-        # Prefer stockend/dicht wording when end is cut off
+        # Mild bump only — do not invent a huge queue from a short visible line
+        floor = max(15, min(35, int(cars * 2)))
+        if wait is None or wait < floor:
+            out["wait_min"] = floor
         if out.get("road") in ("frei", "flüssig", "unbekannt"):
             out["road"] = "stockend"
         summary = out.get("summary") or ""
-        if "ende" not in summary.lower() and "kolonne" not in summary.lower():
+        if "ende" not in summary.lower():
             out["summary"] = (
                 (summary + " " if summary else "")
-                + "Kolonnenende nicht sichtbar — Stau vermutlich länger."
+                + "Kolonnenende nicht sichtbar."
             ).strip()
-        # If many cars AND end not visible → critical
-        if cars >= 12 and _SEV_RANK.get(out["severity"], 0) < _SEV_RANK["critical"]:
+        if cars >= 25 and _SEV_RANK.get(out["severity"], 0) < _SEV_RANK["critical"]:
             out["severity"] = "critical"
             if (out.get("wait_min") or 0) < 40:
                 out["wait_min"] = 40

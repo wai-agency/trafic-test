@@ -62,15 +62,16 @@ def test_queue_end_not_visible_raises_floor():
     )
     assert v["queue_end_visible"] is False
     assert v["severity"] == "warning"
-    assert v["wait_min"] >= 25
+    assert v["wait_min"] >= 15
+    assert v["vehicles"] == 8  # do not invent extra cars in post-process
     assert v["road"] == "stockend"
-    assert "Kolonnenende" in v["summary"] or "ende" in v["summary"].lower()
+    assert "ende" in v["summary"].lower()
 
 
 def test_queue_end_not_visible_many_cars_critical():
     v = hc.normalize_verdict(
         {
-            "vehicles": 18,
+            "vehicles": 28,
             "wait_min": 20,
             "severity": "warning",
             "road": "dicht",
@@ -80,6 +81,24 @@ def test_queue_end_not_visible_many_cars_critical():
     )
     assert v["severity"] == "critical"
     assert v["wait_min"] >= 40
+    assert v["vehicles"] == 28
+
+
+def test_queue_end_visible_keeps_modest_count():
+    v = hc.normalize_verdict(
+        {
+            "vehicles": 12,
+            "wait_min": 20,
+            "severity": "warning",
+            "road": "stockend",
+            "summary": "Mittlere Schlange bis zur Kabine",
+            "queue_end_visible": True,
+        }
+    )
+    assert v["queue_end_visible"] is True
+    assert v["severity"] == "warning"
+    assert v["vehicles"] == 12
+    assert v["wait_min"] == 20
 
 
 def test_parse_openai_fenced_json():
