@@ -38,17 +38,17 @@ def _openai_payload(text: str) -> dict:
 def test_parse_openai_plain_json():
     v = hc.parse_vision_response(
         _openai_payload(
-            '{"vehicles": 12, "trucks": 1, "wait_min": 40, "severity": "warning", '
-            '"weather": "sunny", "road": "stockend", "summary": "Mittlere Kolonne", '
+            '{"vehicles": 4, "trucks": 1, "wait_min": 12, "severity": "warning", '
+            '"weather": "sunny", "road": "flüssig", "summary": "Kurze Kolonne", '
             '"queue_end_visible": true}'
         )
     )
     assert v["severity"] == "warning"
-    assert v["vehicles"] == 12
+    assert v["vehicles"] == 4
     assert v["trucks"] == 1
-    assert v["wait_min"] == 40
+    assert v["wait_min"] == 12
     assert v["weather"] == "sunny"
-    assert v["road"] == "stockend"
+    assert v["road"] == "flüssig"
     assert v["queue_end_visible"] is True
 
 
@@ -104,27 +104,44 @@ def test_missing_queue_end_defaults_to_worst_case():
 def test_queue_end_visible_keeps_modest_count():
     v = hc.normalize_verdict(
         {
-            "vehicles": 12,
-            "wait_min": 20,
+            "vehicles": 4,
+            "wait_min": 10,
             "severity": "warning",
-            "road": "stockend",
-            "summary": "Mittlere Schlange bis zur Kabine",
+            "road": "flüssig",
+            "summary": "Kurze Schlange, letztes Auto klar, freie Spur bis Kabine",
             "queue_end_visible": True,
             "parked_ignored": 7,
         }
     )
     assert v["queue_end_visible"] is True
     assert v["severity"] == "warning"
-    assert v["vehicles"] == 12
-    assert v["wait_min"] == 20
+    assert v["vehicles"] == 4
+    assert v["wait_min"] == 10
     assert v["parked_ignored"] == 7
+
+
+def test_dense_queue_overrides_claimed_visible_end():
+    v = hc.normalize_verdict(
+        {
+            "vehicles": 10,
+            "wait_min": 20,
+            "severity": "warning",
+            "road": "stockend",
+            "summary": "Ende sichtbar, 10 Autos",
+            "queue_end_visible": True,
+        }
+    )
+    assert v["queue_end_visible"] is False
+    assert v["severity"] == "critical"
+    assert v["vehicles"] >= 20
+    assert v["wait_min"] >= 60
 
 
 def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Einfahrtspur" in hc._PROMPT
     assert "SCHLIMMSTEN" in hc._PROMPT or "Worst" in hc._PROMPT or "schlimmsten" in hc._PROMPT.lower()
-    assert hc._PROMPT_VERSION >= 7
+    assert hc._PROMPT_VERSION >= 8
     assert hc.DEFAULT_MODEL == "gpt-4o"
 
 
