@@ -23,27 +23,16 @@ def fetch_nakordoni(config: dict) -> list[Alert]:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "User-Agent": "stuttgart-buzim-traffic/1.0",
+        "Accept": "application/json",
     }
     with httpx.Client(timeout=25.0, headers=headers) as client:
         resp = client.get(url)
         resp.raise_for_status()
         data = resp.json()
 
-    checkpoints = (
-        data.get("checkpoints")
-        or data.get("data")
-        or data.get("items")
-        or (data if isinstance(data, list) else [])
-    )
-    if isinstance(data, dict) and not checkpoints:
-        # Some responses nest under results/border
-        for key in ("results", "border", "queues"):
-            if isinstance(data.get(key), list):
-                checkpoints = data[key]
-                break
-
+    checkpoints = _extract_checkpoints(data)
     alerts: list[Alert] = []
-    for cp in checkpoints or []:
+    for cp in checkpoints:
         if not isinstance(cp, dict):
             continue
         name = str(cp.get("name") or cp.get("title") or cp.get("checkpoint") or "")
@@ -51,7 +40,9 @@ def fetch_nakordoni(config: dict) -> list[Alert]:
             continue
 
         wait = _extract_wait_min(cp)
-        cars = cp.get("cars") or cp.get("queue") or cp.get("vehicles")
+        cars = cp.get("queue")
+        if cars is None:
+            cars = cp.get("cars") or cp.get("vehicles")
         if wait is None and cars is None:
             continue
         if wait is not None and wait < threshold:
@@ -65,9 +56,14 @@ def fetch_nakordoni(config: dict) -> list[Alert]:
             detail_bits.append(f"Fahrzeuge in Warteschlange: {cars}")
         if wait is not None:
             detail_bits.append(f"Geschätzte Wartezeit: ~{wait} min")
-        stale = cp.get("stale")
-        if stale:
+        status = cp.get("wait_status")
+        if status:
+            detail_bits.append(f"Status: {status}")
+        if cp.get("stale"):
             detail_bits.append("Daten ggf. veraltet")
+        age = cp.get("age_min")
+        if age is not None:
+            detail_bits.append(f"Alter: {age} min")
 
         alerts.append(
             Alert(
@@ -76,16 +72,37 @@ def fetch_nakordoni(config: dict) -> list[Alert]:
                 title=f"Grenze: {name or 'HR↔BA'}",
                 detail=" | ".join(detail_bits) or str(cp)[:400],
                 location=name or "HR-BA Grenze",
-                url="https://nakordoni.eu/en/stat/16/17/4",
-                event_id=str(cp.get("id") or cp.get("ppid") or name),
+                url=str(cp.get("source_url") or "https://nakordoni.eu/en/stat/16/17/4"),
+                event_id=str(cp.get("ppid") or cp.get("id") or name),
                 delay_min=wait,
             )
         )
     return alerts
 
 
+def _extract_checkpoints(data: object) -> list:
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+
+    nested = data.get("data")
+    if isinstance(nested, dict) and isinstance(nested.get("checkpoints"), list):
+        return nested["checkpoints"]
+    if isinstance(nested, list):
+        return nested
+
+    for key in ("checkpoints", "items", "results", "border", "queues"):
+        val = data.get(key)
+        if isinstance(val, list):
+            return val
+        if isinstance(val, dict) and isinstance(val.get("checkpoints"), list):
+            return val["checkpoints"]
+    return []
+
+
 def _extract_wait_min(cp: dict) -> int | None:
-    for key in ("wait_min", "waitMinutes", "waiting_time", "eta_min", "queue_time_min", "time"):
+    for key in ("wait_min", "waitMinutes", "waiting_time", "eta_min", "queue_time_min"):
         val = cp.get(key)
         if val is None:
             continue
@@ -93,8 +110,5 @@ def _extract_wait_min(cp: dict) -> int | None:
             num = float(val)
         except (TypeError, ValueError):
             continue
-        # Heuristic: values > 10 hours are probably seconds
-        if num > 600:
-            return int(num / 60)
         return int(num)
     return None

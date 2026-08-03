@@ -69,8 +69,13 @@ nakordoni:
   name_filters:
     - Maljevac
     - Velika Kladuša
+    - Kladuša
     - Izačić
+    - Izacic
     - Ličko Petrovo Selo
+    - Licko Petrovo Selo
+    - Litscho Petrowo Selo
+    - Petrovo Selo
 
 poll_interval_sec: 300
 cooldown_sec: 1800
