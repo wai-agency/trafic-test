@@ -114,7 +114,7 @@ def _payload_from_alerts(
         primary = to_bih or to_hr
         maljevac_now = {
             "name": "Maljevac",
-            "source": "HAK-Cam · gpt-5.6-luna",
+            "source": "HAK-Cam · gpt-5.6-terra",
             "cars": primary.get("cars"),
             "wait_min": primary.get("wait_min"),
             "trucks": primary.get("trucks"),
@@ -1389,7 +1389,7 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
         return """
     <section class="border-now" aria-labelledby="border-title">
       <h2 id="border-title">Maljevac jetzt (HAK-Kamera)</h2>
-      <p class="empty">Noch keine KI-Zählung. Nächster Monitor-Lauf wertet Cam 430 (→BiH) und 429 (→HR) per gpt-5.6-luna aus (~alle 20 Min).</p>
+      <p class="empty">Noch keine KI-Zählung. Nächster Monitor-Lauf wertet Cam 430 (→BiH) und 429 (→HR) per gpt-5.6-terra aus (~alle 20 Min).</p>
     </section>
     """
 

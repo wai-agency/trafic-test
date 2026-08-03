@@ -23,7 +23,7 @@ def _base_payload(**overrides):
             "name": "Maljevac",
             "cars": 10,
             "wait_min": 15,
-            "source": "HAK-Cam · gpt-5.6-luna",
+            "source": "HAK-Cam · gpt-5.6-terra",
             "note": "Live gezählt von HAK-Kameras (OpenAI Vision)",
             "stale": False,
             "trucks": 1,
@@ -103,7 +103,7 @@ def test_render_html_critical_severity_styling():
                 "name": "Maljevac",
                 "cars": 23,
                 "wait_min": 69,
-                "source": "HAK-Cam · gpt-5.6-luna",
+                "source": "HAK-Cam · gpt-5.6-terra",
                 "note": "Live",
                 "stale": False,
                 "to_bih": {

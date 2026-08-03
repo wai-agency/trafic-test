@@ -82,9 +82,9 @@ nakordoni:
 hak_cameras:
   page: "https://m.hak.hr/kamera.asp?g=2&k=177"
   # OpenAI vision model for queue counting. Override via OPENAI_VISION_MODEL env.
-  # Cheap/fast GPT-5.6 Luna for queue counting. Override via OPENAI_VISION_MODEL.
+  # Higher-quality GPT-5.6 Terra for queue counting. Override via OPENAI_VISION_MODEL.
   # Vision JPEGs are cached ~20 min (see hak_cameras._CACHE_TTL_SEC).
-  model: gpt-5.6-luna
+  model: gpt-5.6-terra
   # Only alert from AI verdicts at/above this severity.
   analyze_min_severity: warning
   cams:
