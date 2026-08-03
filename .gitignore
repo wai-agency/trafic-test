@@ -11,5 +11,6 @@ dist/
 build/
 data/
 .traffic_alert_state.json
+.camera_ai_cache.json
 site/
 .DS_Store

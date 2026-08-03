@@ -54,7 +54,9 @@ jobs:
       - name: Cache alert state
         uses: actions/cache@v4
         with:
-          path: .traffic_alert_state.json
+          path: |
+            .traffic_alert_state.json
+            .camera_ai_cache.json
           key: traffic-alert-state-${{ github.run_id }}
           restore-keys: |
             traffic-alert-state-

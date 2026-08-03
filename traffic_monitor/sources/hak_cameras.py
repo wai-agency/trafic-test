@@ -91,28 +91,104 @@ def snapshot_cameras(config: dict, out_dir: str | Path) -> dict[int | str, str]:
     return mapping
 
 
+_CACHE_TTL_SEC = 12 * 60
+# Overridable in tests
+_CACHE_PATH: Path | None = None
+
+
+def _cache_path() -> Path:
+    if _CACHE_PATH is not None:
+        return _CACHE_PATH
+    return Path(env("HAK_CAM_CACHE", ".camera_ai_cache.json") or ".camera_ai_cache.json")
+
+
+def _load_cache() -> dict:
+    path = _cache_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if time.time() - float(data.get("ts") or 0) > _CACHE_TTL_SEC:
+        return {}
+    return data
+
+
+def _save_cache(alerts: list[Alert], model: str) -> None:
+    payload = {
+        "ts": time.time(),
+        "model": model,
+        "alerts": [
+            {
+                "severity": a.severity,
+                "title": a.title,
+                "detail": a.detail,
+                "location": a.location,
+                "url": a.url,
+                "event_id": a.event_id,
+                "delay_min": a.delay_min,
+                "extras": a.extras,
+            }
+            for a in alerts
+        ],
+    }
+    try:
+        _cache_path().write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _alerts_from_cache(data: dict) -> list[Alert]:
+    out: list[Alert] = []
+    for row in data.get("alerts") or []:
+        out.append(
+            Alert(
+                source="HAK-Cam",
+                severity=str(row.get("severity") or "info"),
+                title=str(row.get("title") or "Kamera"),
+                detail=str(row.get("detail") or ""),
+                location=str(row.get("location") or ""),
+                url=row.get("url"),
+                event_id=str(row.get("event_id") or f"hakcam-cache:{row.get('location')}"),
+                delay_min=row.get("delay_min"),
+                extras=dict(row.get("extras") or {}),
+            )
+        )
+    return out
+
+
 def fetch_hak_cameras(config: dict) -> list[Alert]:
     """Analyse configured HAK cameras with Gemini vision (needs GEMINI_API_KEY).
 
-    Clear/info verdicts are still returned so the dashboard and other modules can
-    use them; Telegram typically filters below ``warning``.
+    Results are cached ~12 min so monitor / perfect / dashboard share one quota.
+    Clear/info verdicts are still returned for the dashboard; Telegram filters them.
     """
     hak = config.get("hak_cameras") or {}
     cams = hak.get("cams") or []
     if not cams:
         return []
 
+    cached = _load_cache()
+    if cached.get("alerts"):
+        console.print(f"[dim]HAK-Cam: Cache ({len(cached['alerts'])} verdicts)[/dim]")
+        return _alerts_from_cache(cached)
+
     api_key = env("GEMINI_API_KEY")
     if not api_key:
         return []
 
-    model = env("GEMINI_MODEL", hak.get("model") or DEFAULT_MODEL)
+    model = env("GEMINI_MODEL", hak.get("model") or DEFAULT_MODEL) or DEFAULT_MODEL
     page = str(hak.get("page") or HAK_REFERER)
 
     alerts: list[Alert] = []
     with httpx.Client(timeout=45.0, headers={"User-Agent": "stuttgart-buzim-traffic/1.0"}) as client:
         for cam in cams:
-            if not cam.get("analyze", True):
+            # Default: only analyse explicitly marked cams (relevant or analyze=true)
+            analyze = cam.get("analyze")
+            if analyze is None:
+                analyze = bool(cam.get("relevant", False))
+            if not analyze:
                 continue
             cam_id = cam.get("id")
             if cam_id is None:
@@ -179,6 +255,8 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                     },
                 )
             )
+    if alerts:
+        _save_cache(alerts, model)
     return alerts
 
 
@@ -233,7 +311,11 @@ def _analyze_with_gemini(
         ],
         "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json"},
     }
-    resp = client.post(GEMINI_URL.format(model=model), params={"key": api_key}, json=body)
+    url = GEMINI_URL.format(model=model)
+    resp = client.post(url, params={"key": api_key}, json=body)
+    if resp.status_code == 429:
+        time.sleep(8)
+        resp = client.post(url, params={"key": api_key}, json=body)
     if resp.status_code >= 400:
         raise ValueError(f"Gemini {resp.status_code}: {resp.text[:240]}")
     return parse_gemini_response(resp.json())

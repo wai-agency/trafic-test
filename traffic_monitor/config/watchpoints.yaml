@@ -90,12 +90,15 @@ hak_cameras:
       name: "Maljevac — Ausreise HR → BiH"
       direction: "HR->BiH"
       relevant: true
+      analyze: true   # Gemini KI (Quota) — nur diese Cam standardmäßig
     - id: 429
       name: "Maljevac — Einreise BiH → HR"
       direction: "BiH->HR"
+      analyze: false  # nur Live-Bild im Dashboard
     - id: 406
       name: "Velika Kladuša (BiH)"
       direction: "BiH"
+      analyze: false
 
 poll_interval_sec: 300
 cooldown_sec: 1800

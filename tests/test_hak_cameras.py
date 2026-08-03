@@ -60,8 +60,9 @@ def test_no_api_key_no_alerts(monkeypatch):
     assert hc.fetch_hak_cameras(CONFIG) == []
 
 
-def test_fetch_builds_alerts_including_clear_as_info(monkeypatch):
+def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(hc, "_CACHE_PATH", tmp_path / "cam_cache.json")
     monkeypatch.setattr(hc, "_download_image", lambda client, cam_id: b"\xff\xd8\xff")
 
     verdicts = {
@@ -91,13 +92,25 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch):
 
     monkeypatch.setattr(hc, "_analyze_with_gemini", fake_analyze)
 
+    # Without explicit analyze flags: only relevant cam (430) is analysed
     alerts = hc.fetch_hak_cameras(CONFIG)
-    assert len(alerts) == 2
-    by_sev = {a.severity: a for a in alerts}
-    assert by_sev["critical"].delay_min == 80
-    assert by_sev["info"].delay_min == 0
-    assert by_sev["critical"].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
-    assert "gemini-2.0-flash" in by_sev["critical"].detail
+    assert len(alerts) == 1
+    assert alerts[0].severity == "critical"
+    assert alerts[0].delay_min == 80
+    assert alerts[0].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
+    assert "gemini-2.0-flash" in alerts[0].detail
+
+    # Second call hits cache (no extra Gemini call)
+    calls = {"n": 0}
+
+    def boom(*_a, **_k):
+        calls["n"] += 1
+        raise AssertionError("should use cache")
+
+    monkeypatch.setattr(hc, "_analyze_with_gemini", boom)
+    cached = hc.fetch_hak_cameras(CONFIG)
+    assert len(cached) == 1
+    assert calls["n"] == 0
 
 
 def test_maljevac_cam_wait_prefers_outbound():
