@@ -77,6 +77,7 @@ def _payload_from_alerts(
                 "weather": extras.get("weather"),
                 "road": extras.get("road"),
                 "queue_end_visible": extras.get("queue_end_visible"),
+                "parked_ignored": extras.get("parked_ignored"),
                 "live_url": cam["image_url"],
             }
         )
@@ -1318,6 +1319,8 @@ def _camera_card(cam: dict) -> str:
         meta_bits.append(f"~{cam['trucks']} LKW")
     if cam.get("queue_end_visible") is False:
         meta_bits.append("Ende nicht sichtbar")
+    if cam.get("parked_ignored"):
+        meta_bits.append(f"Parkplatz ~{cam['parked_ignored']} ignoriert")
     if cam.get("weather"):
         meta_bits.append(str(cam["weather"]))
     if cam.get("road"):
