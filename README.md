@@ -77,15 +77,13 @@ docker compose up -d --build
 
 Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages.
 
-1. **Settings → Secrets and variables → Actions** (Pflicht für Telegram)  
-   https://github.com/wai-agency/trafic-test/settings/secrets/actions
-   - `TELEGRAM_BOT_TOKEN`
+1. Secrets (erledigt, wenn gesetzt):  
+   https://github.com/wai-agency/trafic-test/settings/secrets/actions  
+   - `TELEGRAM_BOT_TOKEN`  
    - `TELEGRAM_CHAT_ID` = `5024687751`
-2. **Settings → Pages**  
-   - Source: **Deploy from a branch**  
-   - Branch: **`gh-pages`** / `/ (root)` → Save  
-   (Branch erscheint nach dem ersten erfolgreichen Workflow-Lauf)
-3. **Actions → Traffic Monitor → Run workflow** (Branch `main`, Status-Ping an)
+2. Pages Source: **GitHub Actions**  
+   https://github.com/wai-agency/trafic-test/settings/pages
+3. Workflow läuft bei Push auf `main`, alle 15 Min, oder manuell
 
 Dashboard: **https://wai-agency.github.io/trafic-test/**
 
