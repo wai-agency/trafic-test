@@ -1,0 +1,55 @@
+# Keeps Traffic Monitor refreshing ~every 20 minutes even when GitHub's
+# schedule cron skips/delays for hours.
+#
+# After each successful Traffic Monitor run on main, wait ~19 min and
+# dispatch the next run via workflow_dispatch (allowed with GITHUB_TOKEN).
+# Set repository variable MONITOR_KEEPALIVE=false to stop the loop.
+name: Traffic Monitor Requeue
+
+on:
+  workflow_run:
+    workflows: ["Traffic Monitor"]
+    types: [completed]
+
+concurrency:
+  group: traffic-monitor-requeue
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  requeue:
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_branch == 'main'
+      && vars.MONITOR_KEEPALIVE != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait ~19 min then dispatch next monitor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          WAIT_SEC=1140
+          echo "Last Traffic Monitor succeeded. Sleeping ${WAIT_SEC}s before next dispatch…"
+          sleep "${WAIT_SEC}"
+
+          # Avoid pile-ups if a schedule/push already started a run.
+          in_progress="$(gh run list --repo "${{ github.repository }}" \
+            --workflow "Traffic Monitor" --status in_progress \
+            --json databaseId --jq 'length')"
+          queued="$(gh run list --repo "${{ github.repository }}" \
+            --workflow "Traffic Monitor" --status queued \
+            --json databaseId --jq 'length')"
+          echo "Traffic Monitor in_progress=${in_progress} queued=${queued}"
+          if [ "${in_progress}" != "0" ] || [ "${queued}" != "0" ]; then
+            echo "Skip dispatch — a Traffic Monitor run is already active/queued (its requeue will continue the loop)."
+            exit 0
+          fi
+
+          echo "Dispatching Traffic Monitor…"
+          gh workflow run "Traffic Monitor" --repo "${{ github.repository }}" --ref main
+          echo "Dispatched."

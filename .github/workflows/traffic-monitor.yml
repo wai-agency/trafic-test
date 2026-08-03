@@ -1,11 +1,14 @@
+# Regular refreshes: cron is best-effort; traffic-monitor-requeue.yml chains the
+# next run ~19 min after each success on main (disable via MONITOR_KEEPALIVE=false).
 name: Traffic Monitor
 
 on:
   push:
     branches: [main]
   schedule:
-    # ~alle 20 Min; OpenAI Vision zusätzlich per Cache TTL (~20 Min) gedrosselt
-    - cron: "*/20 * * * *"
+    # Backup cadence if the requeue loop is ever interrupted.
+    - cron: "7,27,47 * * * *"
+    - cron: "17,37,57 * * * *"
   workflow_dispatch:
     inputs:
       min_severity:
