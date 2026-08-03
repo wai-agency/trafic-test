@@ -77,16 +77,15 @@ docker compose up -d --build
 
 Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages.
 
-1. PR mergen / Branch pushen
-2. **Settings → Pages → Build and deployment → Source: GitHub Actions**
-   (einmalig nötig; sonst schlägt der Deploy fehl)
-3. **Settings → Secrets and variables → Actions**
+1. **Settings → Secrets and variables → Actions** (Pflicht für Telegram)
    - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_CHAT_ID`
-   - optional: `NAKORDONI_API_KEY`
-4. **Actions → Traffic Monitor → Run workflow**
-5. Dashboard-URL:
-   **https://wai-agency.github.io/trafic-test/**
+   - `TELEGRAM_CHAT_ID` = `5024687751`
+2. **Actions → Traffic Monitor → Run workflow** (Branch `main`, Status-Ping an)
+3. Dashboard:
+   - als **Artifact** `buzimline-dashboard` im Run herunterladen (funktioniert immer), oder
+   - Live-URL **https://wai-agency.github.io/trafic-test/** nur wenn GitHub Pages geht
+
+**Hinweis privat + Pages:** Dieses Repo ist privat. Kostenloses GitHub Pages braucht oft ein **öffentliches** Repo (oder GitHub Pro). Alternativ: Repo → Settings → General → Change visibility → Public, dann Pages Source = GitHub Actions.
 
 ### Dashboard lokal
 

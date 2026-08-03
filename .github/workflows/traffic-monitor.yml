@@ -28,14 +28,12 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write
 
 jobs:
-  check:
+  monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,16 +64,22 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "::warning::TELEGRAM_BOT_TOKEN oder TELEGRAM_CHAT_ID fehlt in GitHub Secrets."
+            echo "::error::TELEGRAM_BOT_TOKEN oder TELEGRAM_CHAT_ID fehlt."
+            echo "Settings → Secrets and variables → Actions → New repository secret"
+            echo "  TELEGRAM_BOT_TOKEN"
+            echo "  TELEGRAM_CHAT_ID=5024687751"
             traffic-monitor check --min-severity "$MIN_SEVERITY" --console-only --state .traffic_alert_state.json
-          else
-            traffic-monitor check --min-severity "$MIN_SEVERITY" --notify --state .traffic_alert_state.json
-            if [ "$FORCE_NOTIFY" = "true" ]; then
-              python - <<'PY'
+            exit 1
+          fi
+
+          traffic-monitor check --min-severity "$MIN_SEVERITY" --notify --state .traffic_alert_state.json
+
+          if [ "$FORCE_NOTIFY" = "true" ]; then
+            python - <<'PY'
           import os, httpx
           token = os.environ["TELEGRAM_BOT_TOKEN"]
           chat = os.environ["TELEGRAM_CHAT_ID"]
-          text = "✅ Traffic Monitor Lauf OK (manueller Status-Ping)"
+          text = "✅ Reise Helper: Traffic Monitor Lauf OK"
           r = httpx.post(
               f"https://api.telegram.org/bot{token}/sendMessage",
               json={"chat_id": chat, "text": text},
@@ -84,22 +88,64 @@ jobs:
           r.raise_for_status()
           print("status ping sent")
           PY
-            fi
           fi
 
       - name: Build mobile dashboard
         run: traffic-monitor dashboard --out site
 
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: buzimline-dashboard
+          path: site
+          retention-days: 7
+
+  pages:
+    needs: monitor
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Does not fail the whole workflow if Pages can't be enabled (private repos often need Pro or public).
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install and build dashboard
+        run: |
+          pip install -e .
+          traffic-monitor dashboard --out site
+
       - name: Setup Pages
+        id: setup_pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
       - name: Upload Pages artifact
+        if: steps.setup_pages.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
+        if: steps.setup_pages.outcome == 'success'
         uses: actions/deploy-pages@v4
+
+      - name: Pages hint
+        if: steps.setup_pages.outcome != 'success'
+        run: |
+          echo "::warning::GitHub Pages konnte nicht deployed werden."
+          echo "Repo ist privat: entweder öffentlich machen ODER GitHub Pro,"
+          echo "dann Settings → Pages → Source = GitHub Actions."
+          echo "Dashboard-ZIP findest du im Job 'monitor' unter Artifacts."
