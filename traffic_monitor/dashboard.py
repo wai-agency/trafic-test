@@ -789,9 +789,24 @@ def render_html(payload: dict) -> str:
     .cam {{
       border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
       background: #fffaf0;
+      padding: 0; margin: 0; width: 100%;
+      text-align: left; font: inherit; color: inherit;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+      appearance: none; display: block;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }}
+    .cam:active {{ transform: scale(0.985); }}
+    .cam:focus-visible {{ outline: 3px solid var(--accent-2); outline-offset: 2px; }}
     .cam.relevant {{ border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(31,107,87,0.18); }}
+    .cam-media {{ position: relative; }}
     .cam img {{ display: block; width: 100%; height: auto; background: #dfe6e2; }}
+    .cam-zoom {{
+      position: absolute; right: 10px; bottom: 10px;
+      background: rgba(20,35,31,0.72); color: #f7f3ea;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em;
+      padding: 6px 10px; border-radius: 999px;
+      pointer-events: none;
+    }}
     .cam-body {{ padding: 10px 12px; }}
     .cam-name {{ font-weight: 700; font-size: 0.92rem; margin: 0 0 4px; }}
     .cam-meta {{ color: var(--muted); font-size: 0.8rem; margin: 0; line-height: 1.35; }}
@@ -803,6 +818,36 @@ def render_html(payload: dict) -> str:
     .cam-sev.critical {{ background: #f8d7d4; color: var(--critical); }}
     .cam-sev.warning {{ background: #fce7c8; color: var(--warning); }}
     .cam-sev.clear {{ background: #ddece7; color: var(--clear); }}
+    .lightbox {{
+      position: fixed; inset: 0; z-index: 1000;
+      display: none; align-items: center; justify-content: center;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+      background: rgba(10, 18, 16, 0.92);
+      backdrop-filter: blur(6px);
+    }}
+    .lightbox.open {{ display: flex; }}
+    .lightbox-inner {{
+      width: min(960px, 100%);
+      max-height: 100%;
+      display: flex; flex-direction: column; gap: 10px;
+    }}
+    .lightbox img {{
+      width: 100%; height: auto; max-height: min(78vh, 820px);
+      object-fit: contain; border-radius: 14px;
+      background: #111; box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+    }}
+    .lightbox-caption {{
+      color: #f3efe4; font-weight: 700; font-size: 0.95rem;
+      text-align: center; line-height: 1.35;
+    }}
+    .lightbox-close {{
+      align-self: flex-end;
+      min-height: 44px; min-width: 44px;
+      border: 0; border-radius: 999px;
+      background: #f4e4b8; color: #17352d;
+      font-weight: 800; font-size: 1rem;
+      cursor: pointer; padding: 10px 16px;
+    }}
     footer {{
       margin-top: 18px; color: var(--muted); font-size: 0.78rem; text-align: center;
     }}
@@ -898,6 +943,13 @@ def render_html(payload: dict) -> str:
 
     <footer>BuzimLine · Auto-Refresh alle 15 Min · Perfect + HAK-Kameras + optional OpenAI Vision</footer>
   </main>
+  <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
+    <div class="lightbox-inner">
+      <button type="button" class="lightbox-close" id="cam-lightbox-close" aria-label="Schließen">Schließen</button>
+      <img id="cam-lightbox-img" alt="" />
+      <div class="lightbox-caption" id="cam-lightbox-caption"></div>
+    </div>
+  </div>
   <script type="application/json" id="payload">{payload_json}</script>
   <script>
     const mins = 15;
@@ -910,7 +962,53 @@ def render_html(payload: dict) -> str:
         const sep = base.includes('?') ? '&' : '?';
         img.src = base + sep + 't=' + Date.now();
       }});
+      const lb = document.getElementById('cam-lightbox-img');
+      if (lb && lb.dataset.cam && document.getElementById('cam-lightbox').classList.contains('open')) {{
+        const base = lb.dataset.cam;
+        const sep = base.includes('?') ? '&' : '?';
+        lb.src = base + sep + 't=' + Date.now();
+      }}
     }}, 60000);
+
+    (function cameraLightbox() {{
+      const box = document.getElementById('cam-lightbox');
+      const img = document.getElementById('cam-lightbox-img');
+      const caption = document.getElementById('cam-lightbox-caption');
+      const closeBtn = document.getElementById('cam-lightbox-close');
+      if (!box || !img) return;
+
+      function openCam(btn) {{
+        const thumb = btn.querySelector('img[data-cam]');
+        if (!thumb) return;
+        const live = thumb.dataset.cam || thumb.src;
+        const sep = live.includes('?') ? '&' : '?';
+        img.src = live + sep + 't=' + Date.now();
+        img.dataset.cam = live;
+        img.alt = thumb.alt || 'Kamera';
+        caption.textContent = btn.dataset.camTitle || thumb.alt || '';
+        box.hidden = false;
+        box.classList.add('open');
+        box.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        closeBtn.focus();
+      }}
+      function closeCam() {{
+        box.classList.remove('open');
+        box.hidden = true;
+        box.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        img.removeAttribute('src');
+      }}
+
+      document.querySelectorAll('button.cam[data-cam-open]').forEach((btn) => {{
+        btn.addEventListener('click', () => openCam(btn));
+      }});
+      closeBtn.addEventListener('click', closeCam);
+      box.addEventListener('click', (e) => {{ if (e.target === box) closeCam(); }});
+      document.addEventListener('keydown', (e) => {{
+        if (e.key === 'Escape' && box.classList.contains('open')) closeCam();
+      }});
+    }})();
   </script>
 </body>
 </html>
@@ -945,17 +1043,24 @@ def _camera_card(cam: dict) -> str:
         meta_bits.append(str(cam["road"]))
     meta = html.escape(" · ".join(meta_bits))
     verdict = html.escape((cam.get("verdict") or "")[:160])
-    verdict_html = f'<p class="cam-meta">{verdict}</p>' if verdict else ""
+    verdict_html = (
+        f'<span class="cam-meta" style="display:block;margin-top:4px">{verdict}</span>'
+        if verdict
+        else ""
+    )
     return f"""
-    <figure class="cam{relevant}">
-      <img src="{img}" data-cam="{live}" alt="HAK Kamera {name}" loading="lazy" />
-      <figcaption class="cam-body">
+    <button type="button" class="cam{relevant}" data-cam-open data-cam-title="{name}" aria-label="Kamera vergrößern: {name}">
+      <div class="cam-media">
+        <img src="{img}" data-cam="{live}" alt="HAK Kamera {name}" loading="lazy" />
+        <span class="cam-zoom">Tippen · größer</span>
+      </div>
+      <span class="cam-body">
         {sev_html}
-        <p class="cam-name">{name}</p>
-        <p class="cam-meta">{meta}</p>
+        <span class="cam-name" style="display:block">{name}</span>
+        <span class="cam-meta" style="display:block">{meta}</span>
         {verdict_html}
-      </figcaption>
-    </figure>
+      </span>
+    </button>
     """
 
 

@@ -163,3 +163,6 @@ def test_dashboard_embeds_cameras():
     assert "Grenz-Kameras" in html_out
     assert "https://m.hak.hr/cam.asp?id=430" in html_out
     assert "data-cam=" in html_out
+    assert 'data-cam-open' in html_out
+    assert 'id="cam-lightbox"' in html_out
+    assert "Tippen · größer" in html_out
