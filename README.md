@@ -79,12 +79,14 @@ Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ei
 
 1. PR mergen / Branch pushen
 2. **Settings → Pages → Build and deployment → Source: GitHub Actions**
+   (einmalig nötig; sonst schlägt der Deploy fehl)
 3. **Settings → Secrets and variables → Actions**
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_CHAT_ID`
    - optional: `NAKORDONI_API_KEY`
 4. **Actions → Traffic Monitor → Run workflow**
-5. Dashboard-URL danach unter **Settings → Pages** (meist `https://<user>.github.io/<repo>/`)
+5. Dashboard-URL:
+   **https://wai-agency.github.io/trafic-test/**
 
 ### Dashboard lokal
 
