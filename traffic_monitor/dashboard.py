@@ -76,6 +76,7 @@ def _payload_from_alerts(
                 "trucks": extras.get("trucks"),
                 "weather": extras.get("weather"),
                 "road": extras.get("road"),
+                "queue_end_visible": extras.get("queue_end_visible"),
                 "live_url": cam["image_url"],
             }
         )
@@ -99,6 +100,7 @@ def _payload_from_alerts(
                     "severity": c.get("severity"),
                     "note": (c.get("verdict") or "")[:140],
                     "cam_id": c.get("id"),
+                    "queue_end_visible": c.get("queue_end_visible"),
                 }
         return None
 
@@ -1250,12 +1252,13 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
         cars_l = "—" if cars is None else str(cars)
         wait_l = "—" if wait is None else f"~{wait} min"
         trucks_l = "" if trucks is None else f" · ~{trucks} LKW"
+        end_l = "" if side.get("queue_end_visible") is not False else " · Ende nicht sichtbar"
         note = html.escape((side.get("note") or "")[:110])
         return f"""
             <div class="border-side">
               <span class="side-kicker">{html.escape(title)}</span>
               <strong class="side-cars">{html.escape(cars_l)} <small>Autos</small></strong>
-              <span class="side-meta">Wartezeit {html.escape(wait_l)}{html.escape(trucks_l)}</span>
+              <span class="side-meta">Wartezeit {html.escape(wait_l)}{html.escape(trucks_l)}{html.escape(end_l)}</span>
               {"<span class='side-note'>" + note + "</span>" if note else ""}
             </div>
             """
@@ -1313,6 +1316,8 @@ def _camera_card(cam: dict) -> str:
         meta_bits.append(f"~{cam['vehicles']} Autos")
     if cam.get("trucks") is not None:
         meta_bits.append(f"~{cam['trucks']} LKW")
+    if cam.get("queue_end_visible") is False:
+        meta_bits.append("Ende nicht sichtbar")
     if cam.get("weather"):
         meta_bits.append(str(cam["weather"]))
     if cam.get("road"):
