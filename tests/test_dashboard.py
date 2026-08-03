@@ -19,6 +19,16 @@ def _base_payload(**overrides):
         "counts": {"critical": 0, "warning": 1, "total": 1},
         "best_departure": {"label": "Früh", "when": "Di 04.08. 03:00", "iso": "", "score": 100},
         "perfect": None,
+        "maljevac_now": {
+            "name": "Maljevac",
+            "cars": 10,
+            "wait_min": 15,
+            "source": "HAK-Cam KI",
+            "note": "Test",
+            "stale": False,
+            "trucks": 1,
+        },
+        "borders": [{"name": "Maljevac", "cars": 10, "wait_min": 15, "stale": False}],
         "stops": [("Waiblingen", "Start"), ("Bužim", "Ziel")],
         "alerts": [
             {
@@ -46,7 +56,9 @@ def test_render_html_contains_brand_and_status():
     assert "Karawanken Hinweis" in html
     assert 'name="viewport"' in html
     assert "viewport-fit=cover" in html
-    assert "Perfekte Abfahrt" in html
+    assert "Maljevac jetzt" in html
+    assert "Autos in Schlange" in html
+    assert "10 Autos" in html or ">10<" in html
 
 
 def test_render_html_perfect_block():

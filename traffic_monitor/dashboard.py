@@ -14,6 +14,7 @@ from traffic_monitor.perfect_depart import load_perfect_json
 from traffic_monitor.recommend import TZ, _score, recommend_departure
 from traffic_monitor.sources import fetch_all
 from traffic_monitor.sources.hak_cameras import cameras_from_config, snapshot_cameras
+from traffic_monitor.sources.nakordoni import snapshot_borders
 
 console = Console()
 
@@ -79,6 +80,37 @@ def _payload_from_alerts(
             }
         )
 
+    borders = snapshot_borders(config)
+    maljevac_nk = next((b for b in borders if "maljevac" in b["name"].lower()), None)
+    maljevac_cam = next(
+        (c for c in cameras if c.get("relevant") and c.get("vehicles") is not None),
+        None,
+    )
+    # Prefer fresh camera KI when Nakordoni is stale / very old
+    nk_stale = bool(maljevac_nk and (maljevac_nk.get("stale") or (maljevac_nk.get("age_min") or 0) > 30))
+    if maljevac_cam and (nk_stale or not maljevac_nk):
+        maljevac_now = {
+            "name": "Maljevac",
+            "cars": maljevac_cam.get("vehicles"),
+            "wait_min": maljevac_cam.get("wait_min"),
+            "source": "HAK-Cam KI",
+            "note": (maljevac_cam.get("verdict") or "")[:120],
+            "stale": False,
+            "trucks": maljevac_cam.get("trucks"),
+        }
+    elif maljevac_nk:
+        maljevac_now = {
+            "name": maljevac_nk["name"],
+            "cars": maljevac_nk.get("cars"),
+            "wait_min": maljevac_nk.get("wait_min"),
+            "source": "Nakordoni",
+            "note": "veraltet" if nk_stale else "Live-Queue",
+            "stale": nk_stale,
+            "trucks": None,
+        }
+    else:
+        maljevac_now = None
+
     return {
         "generated_at": now.isoformat(),
         "generated_label": now.strftime("%d.%m.%Y %H:%M"),
@@ -95,6 +127,8 @@ def _payload_from_alerts(
         "best_departure": best,
         "perfect": perfect,
         "stops": ROUTE_STOPS,
+        "maljevac_now": maljevac_now,
+        "borders": borders,
         "cameras": cameras,
         "alerts": [
             {
@@ -306,6 +340,7 @@ def render_html(payload: dict) -> str:
         for l in payload["links"]
     )
     perfect_html = _perfect_section(payload.get("perfect"))
+    border_html = _border_section(payload.get("maljevac_now"), payload.get("borders") or [])
     # Strip perfect blob from embedded JSON? Keep it — useful for clients.
     payload_json = html.escape(json.dumps(payload, ensure_ascii=False), quote=True)
 
@@ -319,6 +354,9 @@ def render_html(payload: dict) -> str:
         if payload.get("perfect") and payload["perfect"].get("best")
         else "siehe Empfehlung"
     )
+    mj = payload.get("maljevac_now") or {}
+    hero_cars = f"{mj['cars']} Autos" if mj.get("cars") is not None else "—"
+    hero_wait = f"~{mj['wait_min']} min" if mj.get("wait_min") is not None else "—"
 
     return f"""<!doctype html>
 <html lang="de">
@@ -830,6 +868,48 @@ def render_html(payload: dict) -> str:
     .cam-sev.critical {{ background: #f8d7d4; color: var(--critical); }}
     .cam-sev.warning {{ background: #fce7c8; color: var(--warning); }}
     .cam-sev.clear {{ background: #ddece7; color: var(--clear); }}
+    .border-now {{
+      margin-top: 18px;
+      border-radius: calc(var(--radius) + 4px);
+      padding: 18px 16px;
+      background:
+        radial-gradient(700px 240px at 100% 0%, rgba(196,122,18,0.18), transparent 55%),
+        linear-gradient(160deg, #fffaf0 0%, #f3efe4 100%);
+      border: 1px solid rgba(215,199,161,0.75);
+      box-shadow: var(--shadow);
+    }}
+    .border-now h2 {{ margin-bottom: 6px; }}
+    .border-big {{
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }}
+    .border-big div {{
+      background: rgba(255,255,255,0.65);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 10px;
+      text-align: center;
+    }}
+    .border-big span {{ display: block; color: var(--muted); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }}
+    .border-big strong {{
+      display: block; margin-top: 4px;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(1.6rem, 7vw, 2.2rem);
+      letter-spacing: -0.03em;
+    }}
+    .border-note {{ margin: 10px 0 0; color: var(--muted); font-size: 0.86rem; line-height: 1.4; }}
+    .border-list {{ list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }}
+    .border-list li {{
+      display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+      padding: 8px 0; border-top: 1px dashed var(--line); font-size: 0.9rem;
+    }}
+    .border-list strong {{ font-family: "Fraunces", Georgia, serif; }}
+    .stale-tag {{ color: var(--warning); font-size: 0.72rem; font-weight: 800; }}
+    @media (max-width: 420px) {{
+      .border-big {{ grid-template-columns: 1fr; }}
+    }}
     .lightbox {{
       position: fixed; inset: 0; z-index: 1000;
       display: none; align-items: center; justify-content: center;
@@ -913,19 +993,21 @@ def render_html(payload: dict) -> str:
       <p class="hint">{html.escape(payload["status_hint"])}</p>
       <div class="metrics">
         <div class="metric">
+          <span>Maljevac Autos</span>
+          <strong>{html.escape(hero_cars)}</strong>
+        </div>
+        <div class="metric">
+          <span>Grenze Wartezeit</span>
+          <strong>{html.escape(hero_wait)}</strong>
+        </div>
+        <div class="metric">
           <span>Perfekte Abfahrt</span>
           <strong>{html.escape(hero_depart)}</strong>
         </div>
-        <div class="metric">
-          <span>Ankunft</span>
-          <strong>{html.escape(hero_arrive)}</strong>
-        </div>
-        <div class="metric">
-          <span>Live-Treffer</span>
-          <strong>{payload["counts"]["critical"]} krit. / {payload["counts"]["warning"]} warn.</strong>
-        </div>
       </div>
     </header>
+
+    {border_html}
 
     {perfect_html}
 
@@ -1025,6 +1107,49 @@ def render_html(payload: dict) -> str:
 </body>
 </html>
 """
+
+
+def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
+    if not maljevac_now and not borders:
+        return """
+    <section class="border-now" aria-labelledby="border-title">
+      <h2 id="border-title">Maljevac jetzt</h2>
+      <p class="empty">Noch keine Grenzdaten. Nächster Monitor-Lauf lädt Nakordoni + Kamera-KI.</p>
+    </section>
+    """
+    cars = maljevac_now.get("cars") if maljevac_now else None
+    wait = maljevac_now.get("wait_min") if maljevac_now else None
+    source = html.escape(str((maljevac_now or {}).get("source") or "—"))
+    note = html.escape(str((maljevac_now or {}).get("note") or ""))
+    stale = bool((maljevac_now or {}).get("stale"))
+    trucks = (maljevac_now or {}).get("trucks")
+    cars_label = "—" if cars is None else str(cars)
+    wait_label = "—" if wait is None else f"~{wait} min"
+    trucks_label = "—" if trucks is None else str(trucks)
+
+    others = ""
+    for b in borders[:5]:
+        stale_tag = " <span class='stale-tag'>veraltet</span>" if b.get("stale") else ""
+        cars_b = b["cars"] if b.get("cars") is not None else "—"
+        wait_b = f"~{b['wait_min']} min" if b.get("wait_min") is not None else "—"
+        others += (
+            f"<li><span>{html.escape(b.get('name') or '')}{stale_tag}</span>"
+            f"<strong>{cars_b} Autos</strong><span>{wait_b}</span></li>"
+        )
+
+    return f"""
+    <section class="border-now" aria-labelledby="border-title">
+      <h2 id="border-title">Maljevac jetzt</h2>
+      <p class="empty" style="margin:0">Live Autos an der Grenze · Quelle: {source}{" · Achtung veraltet" if stale else ""}</p>
+      <div class="border-big">
+        <div><span>Autos in Schlange</span><strong>{html.escape(cars_label)}</strong></div>
+        <div><span>Wartezeit</span><strong>{html.escape(wait_label)}</strong></div>
+        <div><span>LKW (KI)</span><strong>{html.escape(trucks_label)}</strong></div>
+      </div>
+      {"<p class='border-note'>" + note + "</p>" if note else ""}
+      {"<ul class='border-list'>" + others + "</ul>" if others else ""}
+    </section>
+    """
 
 
 def _camera_card(cam: dict) -> str:
