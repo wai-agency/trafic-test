@@ -7,7 +7,7 @@ from traffic_monitor.models import Alert
 CONFIG = {
     "hak_cameras": {
         "page": "https://m.hak.hr/kamera.asp?g=2&k=177",
-        "model": "gpt-4o-mini",
+        "model": "gpt-4o",
         "analyze_min_severity": "warning",
         "cams": [
             {
@@ -84,6 +84,23 @@ def test_queue_end_not_visible_many_cars_critical():
     assert v["wait_min"] >= 60
 
 
+def test_missing_queue_end_defaults_to_worst_case():
+    v = hc.normalize_verdict(
+        {
+            "vehicles": 10,
+            "wait_min": 15,
+            "severity": "warning",
+            "road": "stockend",
+            "summary": "Etwa 10 Autos",
+            # queue_end_visible omitted → assume not visible
+        }
+    )
+    assert v["queue_end_visible"] is False
+    assert v["severity"] == "critical"
+    assert v["wait_min"] >= 60
+    assert v["vehicles"] >= 20
+
+
 def test_queue_end_visible_keeps_modest_count():
     v = hc.normalize_verdict(
         {
@@ -107,11 +124,15 @@ def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Einfahrtspur" in hc._PROMPT
     assert "SCHLIMMSTEN" in hc._PROMPT or "Worst" in hc._PROMPT or "schlimmsten" in hc._PROMPT.lower()
-    assert hc._PROMPT_VERSION >= 6
+    assert hc._PROMPT_VERSION >= 7
+    assert hc.DEFAULT_MODEL == "gpt-4o"
 
 
 def test_parse_openai_fenced_json():
-    text = "```json\n{\"vehicles\": 25, \"wait_min\": 90, \"severity\": \"critical\", \"summary\": \"Lange Schlange\"}\n```"
+    text = (
+        '```json\n{"vehicles": 25, "wait_min": 90, "severity": "critical", '
+        '"summary": "Lange Schlange", "queue_end_visible": true}\n```'
+    )
     v = hc.parse_vision_response(_openai_payload(text))
     assert v["severity"] == "critical"
     assert v["vehicles"] == 25
@@ -119,7 +140,9 @@ def test_parse_openai_fenced_json():
 
 
 def test_parse_bad_severity_defaults_warning():
-    v = hc.parse_vision_response(_openai_payload('{"vehicles": 3, "severity": "banana"}'))
+    v = hc.parse_vision_response(
+        _openai_payload('{"vehicles": 3, "severity": "banana", "queue_end_visible": true}')
+    )
     assert v["severity"] == "warning"
     assert v["wait_min"] is None
 
@@ -173,7 +196,7 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
     assert by_id[430].delay_min == 80
     assert by_id[430].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
     assert by_id[430].extras["role"] == "to_bih"
-    assert "gpt-4o-mini" in by_id[430].detail
+    assert "gpt-4o" in by_id[430].detail
     assert by_id[429].severity == "info"  # clear → info
     assert by_id[429].extras["vehicles"] == 1
     assert by_id[429].extras["role"] == "to_hr"
