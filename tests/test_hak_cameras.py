@@ -181,8 +181,9 @@ def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Kolonne" in hc._PROMPT
     assert "einzeln" in hc._PROMPT.lower() or "Auto fuer Auto" in hc._PROMPT
-    assert hc._PROMPT_VERSION >= 12
+    assert hc._PROMPT_VERSION >= 13
     assert hc.DEFAULT_MODEL == "gpt-4o"
+    assert "gpt-4o-mini" in hc.FALLBACK_MODELS
 
 
 def test_watchpoints_have_camera_count_hints():
@@ -268,7 +269,10 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
         cam_id = 430 if "Ausreise" in name else 429
         return verdicts[cam_id]
 
-    monkeypatch.setattr(hc, "_analyze_with_openai", fake_analyze)
+    def fake_fallback(client, image, api_key, model, name, direction, count_hint=""):
+        return fake_analyze(client, image, api_key, model, name, direction, count_hint), model
+
+    monkeypatch.setattr(hc, "_analyze_with_fallback", fake_fallback)
 
     alerts = hc.fetch_hak_cameras(CONFIG)
     assert len(alerts) == 2

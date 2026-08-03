@@ -24,35 +24,34 @@ console = Console()
 
 HAK_REFERER = "https://m.hak.hr/"
 DEFAULT_MODEL = "gpt-4o"
+FALLBACK_MODELS = ("gpt-4o-mini", "gpt-5-nano")
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 12
+_PROMPT_VERSION = 13
 
 _PROMPT = (
-    "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
-    "Analysiere NUR die angegebene Fahrtrichtung.\n\n"
-    "ZAEHL-METHODE (wichtig):\n"
-    "• Gehe die Kolonne Auto fuer Auto von vorne nach hinten durch — nicht schaetzen aus dem Bauch.\n"
-    "• Bei dichter Kolonne bis zu den Kabinen sind oft 15–30 PKW sichtbar; unterschätze nicht.\n"
-    "• Zuerst vehicles_visible (klar erkennbare Autos), dann vehicles (Schaetzung nur wenn Ende "
-    "abgeschnitten ist).\n\n"
-    "HARTE REGEL — nur Einfahrt-/Wartespur der genannten Richtung:\n"
-    "• NIEMALS: Gegenrichtung, Parkplaetze, abgestellte Autos, Schatten, Gebaeude.\n"
-    "• LKW: Feld trucks, nicht in vehicles/vehicles_visible.\n\n"
-    "Kolonnenende:\n"
-    "• queue_end_visible=true wenn letztes Auto klar ODER Spur frei/nahezu frei (0–2 Autos).\n"
-    "• queue_end_visible=false nur bei dichter Kolonne, die am Bildrand weitergeht.\n"
-    "• Bei dichter Kolonne mit unsicherem Ende: leichte Aufschlagschaetzung (+20–40%%), "
-    "nicht wild verdoppeln und nicht unter vehicles_visible gehen.\n\n"
-    "Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
+    "Du hilfst Autofahrern bei der Reiseplanung (Strecke Waiblingen → Bužim). "
+    "Vor dir ist ein oeffentliches Live-Bild einer Strassenkamera an einem Grenzubergang. "
+    "Schätze die Warteschlange NUR in der genannten Fahrtrichtung.\n\n"
+    "Zaehlmethode:\n"
+    "• Gehe die Kolonne Auto fuer Auto von vorne nach hinten durch.\n"
+    "• Bei dichter Kolonne bis zu den Kabinen oft 15–30 PKW — nicht unterschaetzen.\n"
+    "• vehicles_visible = klar erkennbare PKW in der genannten Spur; "
+    "vehicles = Schaetzung der Warteschlange (nicht unter vehicles_visible).\n"
+    "• Nicht mitzaehlen: Gegenrichtung, Parkplaetze, abgestellte Autos.\n"
+    "• LKW nur im Feld trucks.\n\n"
+    "queue_end_visible=true wenn das letzte Auto klar ist oder die Spur frei wirkt. "
+    "false nur bei dichter Kolonne, die am Bildrand weitergeht "
+    "(dann leichte Aufschlagschaetzung +20–40%%).\n\n"
+    "Antworte NUR als JSON:\n"
     "{"
-    "\"vehicles_visible\": <int klar sichtbare Autos in der genannten Spur>, "
-    "\"vehicles\": <int Schaetzung Warteschlange nur dieser Spur>, "
-    "\"trucks\": <int LKW>, "
-    "\"wait_min\": <int Minuten>, "
+    "\"vehicles_visible\": <int>, "
+    "\"vehicles\": <int>, "
+    "\"trucks\": <int>, "
+    "\"wait_min\": <int>, "
     "\"queue_end_visible\": <true|false>, "
     "\"parked_ignored\": <int>, "
     "\"severity\": \"clear\"|\"warning\"|\"critical\", "
@@ -60,8 +59,7 @@ _PROMPT = (
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
     "\"summary\": \"<kurz deutsch>\" "
     "}.\n"
-    "Severity: unter 5 Autos = clear; 5-20 = warning; ueber 20 = critical; "
-    "Wartezeit ~2–3 min pro Auto in der aktiven Spur."
+    "Severity: <5 clear, 5–20 warning, >20 critical. Wartezeit ~2–3 min/Auto."
 )
 
 
@@ -224,15 +222,9 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
             hint = str(cam.get("count_hint") or "")
             try:
                 image = _download_image(client, cam_id)
-                verdict = _analyze_with_openai(
+                verdict, used_model = _analyze_with_fallback(
                     client, image, api_key, model, name, direction, count_hint=hint
                 )
-                if verdict is None:
-                    time.sleep(2)
-                    console.print(f"[dim]HAK-Cam {cam_id}: Retry nach leerer Antwort…[/dim]")
-                    verdict = _analyze_with_openai(
-                        client, image, api_key, model, name, direction, count_hint=hint
-                    )
             except httpx.HTTPError as exc:
                 console.print(f"[yellow]HAK-Cam {cam_id}: HTTP {exc}[/yellow]")
                 continue
@@ -276,7 +268,7 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                 detail_bits.append(f"Wetter: {verdict['weather']}")
             if verdict.get("road"):
                 detail_bits.append(f"Lage: {verdict['road']}")
-            detail_bits.append(f"KI: {model}")
+            detail_bits.append(f"KI: {used_model}")
 
             alerts.append(
                 Alert(
@@ -342,6 +334,37 @@ def _download_image(client: httpx.Client, cam_id: object) -> bytes:
     if "image" not in ctype.lower():
         raise ValueError(f"unexpected content-type: {ctype!r}")
     return resp.content
+
+
+def _analyze_with_fallback(
+    client: httpx.Client,
+    image: bytes,
+    api_key: str,
+    primary_model: str,
+    name: str,
+    direction: str,
+    count_hint: str = "",
+) -> tuple[dict | None, str]:
+    """Try primary model, then fallbacks, when the model refuses or returns empty JSON."""
+    models: list[str] = [primary_model]
+    for m in FALLBACK_MODELS:
+        if m not in models:
+            models.append(m)
+    last: dict | None = None
+    used = primary_model
+    for idx, model in enumerate(models):
+        used = model
+        last = _analyze_with_openai(
+            client, image, api_key, model, name, direction, count_hint=count_hint
+        )
+        if last is not None:
+            if idx > 0:
+                console.print(f"[dim]HAK-Cam: Fallback-Modell {model}[/dim]")
+            return last, model
+        if idx + 1 < len(models):
+            console.print(f"[dim]HAK-Cam: {model} leer/refusal — versuche {models[idx + 1]}…[/dim]")
+            time.sleep(1)
+    return last, used
 
 
 def _analyze_with_openai(
