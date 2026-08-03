@@ -27,18 +27,13 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
   actions: write
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,13 +72,12 @@ jobs:
 
           traffic-monitor check --min-severity "$MIN_SEVERITY" --notify --state .traffic_alert_state.json
 
-          # Always ping on manual runs with force_notify; also ping once on push for setup confirmation
-          if [ "$FORCE_NOTIFY" = "true" ] || [ "${{ github.event_name }}" = "push" ]; then
+          if [ "$FORCE_NOTIFY" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python - <<'PY'
           import os, httpx
           token = os.environ["TELEGRAM_BOT_TOKEN"]
           chat = os.environ["TELEGRAM_CHAT_ID"]
-          text = "✅ Reise Helper: Traffic Monitor + Dashboard Deploy läuft"
+          text = "✅ Reise Helper: Traffic Monitor Lauf OK\nDashboard: https://wai-agency.github.io/trafic-test/"
           r = httpx.post(
               f"https://api.telegram.org/bot{token}/sendMessage",
               json={"chat_id": chat, "text": text},
@@ -104,14 +98,11 @@ jobs:
           path: site
           retention-days: 7
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
