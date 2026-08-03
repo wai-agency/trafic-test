@@ -183,6 +183,9 @@ def score_slot(
     route: RouteOption,
     forecast: list[dict],
     google_key: str | None,
+    *,
+    live_cam_wait_min: int | None = None,
+    now: datetime | None = None,
 ) -> SlotScore | None:
     times = None
     provider = ""
@@ -202,6 +205,14 @@ def score_slot(
     if uses_maljevac:
         border_wait = _cars_to_wait_min(cars)
         notes = f"Maljevac-Forecast ~{cars:.1f} Autos (Band {lo:.1f}-{hi:.1f}) → ~{border_wait} min"
+        # If border arrival is soon, blend in live HAK camera KI wait
+        ref = now or datetime.now(TZ)
+        hours_to_border = (arrive_border - ref).total_seconds() / 3600
+        if live_cam_wait_min is not None and hours_to_border <= 3:
+            blended = max(border_wait, int(live_cam_wait_min))
+            if blended != border_wait:
+                notes += f" · HAK-Cam-KI live ~{live_cam_wait_min} min → genutzt {blended} min"
+                border_wait = blended
     else:
         # Izačić: no separate forecast here; assume similar night pattern but +15% uncertainty
         border_wait = _cars_to_wait_min(cars * 1.05)
@@ -261,10 +272,26 @@ def compute_perfect_payload() -> dict:
     routes = candidate_routes()
     slots = departure_slots(now)
 
+    live_cam_wait = None
+    try:
+        from traffic_monitor.config import load_config
+        from traffic_monitor.sources.hak_cameras import fetch_hak_cameras, maljevac_cam_wait_min
+
+        live_cam_wait = maljevac_cam_wait_min(fetch_hak_cameras(load_config()))
+    except Exception:
+        live_cam_wait = None
+
     scored: list[SlotScore] = []
     for dep in slots:
         for route in routes:
-            s = score_slot(dep, route, forecast, google_key)
+            s = score_slot(
+                dep,
+                route,
+                forecast,
+                google_key,
+                live_cam_wait_min=live_cam_wait,
+                now=now,
+            )
             if s:
                 scored.append(s)
 

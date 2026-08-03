@@ -50,17 +50,24 @@ def candidate_routes(blockers: set[str]) -> list[RouteOption]:
 
 
 def border_wait_for_route(route: RouteOption, alerts: list[Alert]) -> int:
-    """Attach live Nakordoni waits to the border used by this candidate."""
+    """Attach live Nakordoni + HAK-Cam waits to the border used by this candidate."""
+    from traffic_monitor.sources.hak_cameras import maljevac_cam_wait_min
+
     labels = " ".join(route.labels).lower() + " " + route.id
     waits: dict[str, int] = {}
     for alert in alerts:
-        if alert.source.lower() != "nakordoni" or alert.delay_min is None:
+        src = alert.source.lower()
+        if src not in {"nakordoni", "hak-cam"} or alert.delay_min is None:
             continue
         text = f"{alert.title} {alert.location}".lower()
         if "maljevac" in text:
             waits["maljevac"] = max(waits.get("maljevac", 0), int(alert.delay_min))
         if any(k in text for k in ("izači", "izaci", "petrovo", "petrowo", "ličko", "licko", "litscho")):
             waits["izacic"] = max(waits.get("izacic", 0), int(alert.delay_min))
+
+    cam_wait = maljevac_cam_wait_min(alerts)
+    if cam_wait is not None:
+        waits["maljevac"] = max(waits.get("maljevac", 0), cam_wait)
 
     if "izacic" in labels or "izačić" in labels:
         return waits.get("izacic", 0)

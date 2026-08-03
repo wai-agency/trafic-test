@@ -13,7 +13,7 @@ from traffic_monitor.models import Alert
 from traffic_monitor.perfect_depart import load_perfect_json
 from traffic_monitor.recommend import TZ, _score, recommend_departure
 from traffic_monitor.sources import fetch_all
-from traffic_monitor.sources.hak_cameras import cameras_from_config
+from traffic_monitor.sources.hak_cameras import cameras_from_config, snapshot_cameras
 
 console = Console()
 
@@ -60,20 +60,22 @@ def _payload_from_alerts(
     best = _best_slot(now)
     route = config.get("route") or {}
 
-    cam_verdicts = {
-        a.location: a
-        for a in alerts
-        if a.source == "HAK-Cam"
-    }
+    cam_verdicts = {a.location: a for a in alerts if a.source == "HAK-Cam"}
     cameras = []
     for cam in cameras_from_config(config):
         verdict = cam_verdicts.get(cam["name"])
+        extras = verdict.extras if verdict else {}
         cameras.append(
             {
                 **cam,
                 "severity": verdict.severity if verdict else None,
                 "verdict": verdict.detail if verdict else None,
                 "wait_min": verdict.delay_min if verdict else None,
+                "vehicles": extras.get("vehicles"),
+                "trucks": extras.get("trucks"),
+                "weather": extras.get("weather"),
+                "road": extras.get("road"),
+                "live_url": cam["image_url"],
             }
         )
 
@@ -870,6 +872,8 @@ def render_html(payload: dict) -> str:
 
     {perfect_html}
 
+    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Bild aktualisiert ~alle 60s · KI-Auswertung fließt in Grenzwartezeit &amp; Routing ein</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
+
     <section aria-labelledby="route-title">
       <h2 id="route-title">Route</h2>
       <ol class="stops">{stops_html}</ol>
@@ -879,8 +883,6 @@ def render_html(payload: dict) -> str:
       <h2 id="alerts-title">Live-Meldungen</h2>
       <div class="alerts">{alerts_html}</div>
     </section>
-
-    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
 
     <section aria-labelledby="check-title">
       <h2 id="check-title">Vor dem Losfahren</h2>
@@ -894,12 +896,21 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Auto-Refresh alle 15 Min · Perfect-Abfahrt inkl. Google-Stau + Maljevac-Forecast</footer>
+    <footer>BuzimLine · Auto-Refresh alle 15 Min · Perfect + HAK-Kameras + optional Gemini-KI</footer>
   </main>
   <script type="application/json" id="payload">{payload_json}</script>
   <script>
     const mins = 15;
     setTimeout(() => location.reload(), mins * 60 * 1000);
+    // Soft live refresh of HAK camera stills
+    setInterval(() => {{
+      document.querySelectorAll('img[data-cam]').forEach((img) => {{
+        const base = img.dataset.cam;
+        if (!base) return;
+        const sep = base.includes('?') ? '&' : '?';
+        img.src = base + sep + 't=' + Date.now();
+      }});
+    }}, 60000);
   </script>
 </body>
 </html>
@@ -910,27 +921,39 @@ def _camera_card(cam: dict) -> str:
     name = html.escape(cam.get("name") or "")
     direction = html.escape(cam.get("direction") or "")
     img = html.escape(cam.get("image_url") or "")
+    live = html.escape(cam.get("live_url") or cam.get("image_url") or "")
     relevant = " relevant" if cam.get("relevant") else ""
     severity = cam.get("severity")
+    sev_label = "frei" if severity == "info" else (severity or "")
     sev_html = (
-        f'<span class="cam-sev {html.escape(severity)}">{html.escape(severity)}</span><br/>'
+        f'<span class="cam-sev {html.escape(severity)}">{html.escape(sev_label)}</span><br/>'
         if severity
-        else ""
+        else '<span class="cam-sev">Live</span><br/>'
     )
-    wait = cam.get("wait_min")
     meta_bits = []
     if direction:
         meta_bits.append(direction)
-    if wait is not None:
-        meta_bits.append(f"KI-Wartezeit ~{wait} min")
+    if cam.get("wait_min") is not None:
+        meta_bits.append(f"KI-Wartezeit ~{cam['wait_min']} min")
+    if cam.get("vehicles") is not None:
+        meta_bits.append(f"~{cam['vehicles']} Autos")
+    if cam.get("trucks") is not None:
+        meta_bits.append(f"~{cam['trucks']} LKW")
+    if cam.get("weather"):
+        meta_bits.append(str(cam["weather"]))
+    if cam.get("road"):
+        meta_bits.append(str(cam["road"]))
     meta = html.escape(" · ".join(meta_bits))
+    verdict = html.escape((cam.get("verdict") or "")[:160])
+    verdict_html = f'<p class="cam-meta">{verdict}</p>' if verdict else ""
     return f"""
     <figure class="cam{relevant}">
-      <img src="{img}" alt="HAK Kamera {name}" loading="lazy" />
+      <img src="{img}" data-cam="{live}" alt="HAK Kamera {name}" loading="lazy" />
       <figcaption class="cam-body">
         {sev_html}
         <p class="cam-name">{name}</p>
         <p class="cam-meta">{meta}</p>
+        {verdict_html}
       </figcaption>
     </figure>
     """
@@ -968,10 +991,19 @@ def write_dashboard(
     alerts = fetch_all(config)
     perfect = load_perfect_json(out / "perfect.json")
     payload = _payload_from_alerts(config, alerts, perfect=perfect)
+    # Snapshot live JPEGs so GitHub Pages always shows a fresh still
+    snaps = snapshot_cameras(config, out)
+    if snaps:
+        for cam in payload.get("cameras") or []:
+            local = snaps.get(cam.get("id"))
+            if local:
+                cam["image_url"] = local
     html_path = out / "index.html"
     html_path.write_text(render_html(payload), encoding="utf-8")
     (out / "status.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     console.print(f"[green]Dashboard geschrieben:[/green] {html_path}")
+    if snaps:
+        console.print(f"[green]Kamera-Snapshots:[/green] {len(snaps)} Stück in {out / 'cams'}")
     return html_path
 
 
