@@ -275,40 +275,40 @@ def _perfect_section(perfect: dict | None) -> str:
         <span class="perfect-stamp">Live · {html.escape(perfect.get('generated_label', ''))}</span>
       </div>
 
-      <div class="perfect-hero">
+      <div class="perfect-hero" id="perfect-hero" data-perfect-root>
         <p class="perfect-kicker">Waiblingen → Bužim · komplette Route</p>
-        <p class="perfect-time">{html.escape(best['depart_short'])}</p>
-        <p class="perfect-day">{html.escape(best['depart_day'])} · {html.escape(best.get('badge') or 'Empfehlung')}</p>
+        <p class="perfect-time" id="perfect-time">{html.escape(best['depart_short'])}</p>
+        <p class="perfect-day" id="perfect-day">{html.escape(best['depart_day'])} · {html.escape(best.get('badge') or 'Empfehlung')}</p>
 
         <ol class="journey" aria-label="Reisezeitlinie">
           <li>
             <span class="j-label">Los</span>
-            <strong>{html.escape(best['depart_short'])}</strong>
+            <strong id="perfect-los">{html.escape(best['depart_short'])}</strong>
             <span class="j-sub">Waiblingen</span>
           </li>
           <li class="j-line" aria-hidden="true"></li>
           <li>
             <span class="j-label">Grenze</span>
-            <strong>{html.escape(best['arrive_border_short'])}</strong>
-            <span class="j-sub">~{best['border_wait_min']} min · {best['border_cars']} Autos</span>
+            <strong id="perfect-border">{html.escape(best['arrive_border_short'])}</strong>
+            <span class="j-sub" id="perfect-border-meta">~{best['border_wait_min']} min · {best['border_cars']} Autos</span>
           </li>
           <li class="j-line" aria-hidden="true"></li>
           <li>
             <span class="j-label">Ziel</span>
-            <strong>{html.escape(best['arrive_buzim_short'])}</strong>
+            <strong id="perfect-arrive">{html.escape(best['arrive_buzim_short'])}</strong>
             <span class="j-sub">Bužim</span>
           </li>
         </ol>
 
         <div class="perfect-stats">
-          <div><span>Gesamt</span><strong>{html.escape(best['total_label'])}</strong></div>
-          <div><span>Distanz</span><strong>~{best['distance_km']} km</strong></div>
-          <div><span>Route</span><strong>{html.escape(best['route_id'])}</strong></div>
+          <div><span>Gesamt</span><strong id="perfect-total">{html.escape(best['total_label'])}</strong></div>
+          <div><span>Distanz</span><strong id="perfect-dist">~{best['distance_km']} km</strong></div>
+          <div><span>Route</span><strong id="perfect-route-id">{html.escape(best['route_id'])}</strong></div>
         </div>
 
         <p class="perfect-route">{journey}</p>
-        <a class="maps-btn" href="{html.escape(best['maps_url'])}" target="_blank" rel="noopener">In Google Maps öffnen</a>
-        <p class="perfect-note">{html.escape(perfect.get('hint', ''))}</p>
+        <a class="maps-btn" id="perfect-maps" href="{html.escape(best['maps_url'])}" target="_blank" rel="noopener">In Google Maps öffnen</a>
+        <p class="perfect-note" id="perfect-note">{html.escape(perfect.get('hint', ''))}</p>
       </div>
 
       {alt_html}
@@ -1051,7 +1051,7 @@ def render_html(payload: dict) -> str:
         </div>
         <div class="metric">
           <span>Perfekte Abfahrt</span>
-          <strong>{html.escape(hero_depart)}</strong>
+          <strong id="hero-depart">{html.escape(hero_depart)}</strong>
         </div>
       </div>
     </header>
@@ -1151,6 +1151,74 @@ def render_html(payload: dict) -> str:
       document.addEventListener('keydown', (e) => {{
         if (e.key === 'Escape' && box.classList.contains('open')) closeCam();
       }});
+    }})();
+
+    // If recommended departure is missed, roll to next-best from cached slots
+    (function advancePerfectLive() {{
+      const raw = document.getElementById('payload');
+      if (!raw) return;
+      let data;
+      try {{ data = JSON.parse(raw.textContent); }} catch (_) {{ return; }}
+      const perfect = data && data.perfect;
+      if (!perfect || !perfect.best) return;
+      const graceMs = 5 * 60 * 1000;
+
+      function upcoming(slots) {{
+        const now = Date.now();
+        return (slots || []).filter((s) => {{
+          const t = Date.parse(s.depart);
+          return !Number.isNaN(t) && t > now - graceMs;
+        }});
+      }}
+
+      function pickBest() {{
+        const pool = upcoming(perfect.top);
+        if (!pool.length) return null;
+        pool.sort((a, b) => {{
+          const aa = Date.parse(a.arrive_buzim || a.depart);
+          const bb = Date.parse(b.arrive_buzim || b.depart);
+          return aa - bb;
+        }});
+        return pool[0];
+      }}
+
+      function apply(best) {{
+        const set = (id, text) => {{
+          const el = document.getElementById(id);
+          if (el && text != null) el.textContent = text;
+        }};
+        set('perfect-time', best.depart_short);
+        set('perfect-day', (best.depart_day || '') + ' · ' + (best.badge || 'nächste beste'));
+        set('perfect-los', best.depart_short);
+        set('perfect-border', best.arrive_border_short);
+        if (best.border_wait_min != null && best.border_cars != null) {{
+          set('perfect-border-meta', '~' + best.border_wait_min + ' min · ' + best.border_cars + ' Autos');
+        }}
+        set('perfect-arrive', best.arrive_buzim_short);
+        set('perfect-total', best.total_label);
+        if (best.distance_km != null) set('perfect-dist', '~' + best.distance_km + ' km');
+        set('perfect-route-id', best.route_id);
+        const maps = document.getElementById('perfect-maps');
+        if (maps && best.maps_url) maps.href = best.maps_url;
+        set('hero-depart', best.depart_label || best.depart_short);
+        document.querySelectorAll('.tl-item').forEach((li) => {{
+          const label = (li.querySelector('.tl-depart') || {{}}).textContent || '';
+          const hit = label.indexOf(best.depart_short) !== -1;
+          li.classList.toggle('best', hit);
+        }});
+      }}
+
+      function tick() {{
+        const next = pickBest();
+        if (!next) return;
+        if (next.depart !== perfect.best.depart) {{
+          next.badge = 'nächste beste';
+          perfect.best = next;
+          apply(next);
+        }}
+      }}
+      tick();
+      setInterval(tick, 30000);
     }})();
   </script>
 </body>

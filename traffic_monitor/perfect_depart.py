@@ -389,7 +389,8 @@ def compute_perfect_payload() -> dict:
         "timeline": timeline,
         "hint": (
             "Google Live-Stau + Nakordoni Maljevac-Forecast (+ HAK-Cam KI wenn Ankunft nah). "
-            "Abfahrtsfenster inkl. 00–05; Update alle ~30 Min wegen API-Limits."
+            "Abfahrtsfenster inkl. 00–05; Update alle ~30 Min. "
+            "Verpasste Abfahrt → automatisch nächste beste."
         ),
     }
 
@@ -407,9 +408,133 @@ def load_perfect_json(path: str | Path) -> dict | None:
     if not p.exists():
         return None
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    return advance_perfect_payload(data)
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=TZ)
+    return dt.astimezone(TZ)
+
+
+def advance_perfect_payload(
+    payload: dict | None,
+    now: datetime | None = None,
+    *,
+    grace_min: int = 5,
+) -> dict | None:
+    """Drop past departures and promote the next-best future slot.
+
+    Used when perfect.json is cached (~30 min) so a missed Abfahrt does not
+    stay on the dashboard until the next Google refresh.
+    """
+    if not payload or not payload.get("best"):
+        return payload
+
+    now = now or datetime.now(TZ)
+    cutoff = now - timedelta(minutes=grace_min)
+
+    def is_upcoming(slot: dict | None) -> bool:
+        if not slot:
+            return False
+        dep = _parse_iso(slot.get("depart"))
+        return dep is not None and dep > cutoff
+
+    def sort_key(s: dict):
+        arrive = _parse_iso(s.get("arrive_buzim"))
+        if arrive is None:
+            arrive = _parse_iso(s.get("depart")) or datetime.max.replace(tzinfo=TZ)
+        return (
+            arrive,
+            s.get("border_wait_min") if s.get("border_wait_min") is not None else 999,
+            s.get("border_cars") if s.get("border_cars") is not None else 99,
+        )
+
+    top_future = [s for s in (payload.get("top") or []) if is_upcoming(s)]
+    timeline_src = payload.get("timeline") or []
+    timeline_future = [dict(t) for t in timeline_src if is_upcoming(t)]
+
+    candidates = list(top_future)
+    if not candidates:
+        old_best = payload.get("best") or {}
+        for t in timeline_future:
+            candidates.append(
+                {
+                    **old_best,
+                    "depart": t.get("depart"),
+                    "depart_short": t.get("depart_short"),
+                    "depart_day": t.get("depart_day"),
+                    "depart_label": f"{t.get('depart_day', '')} {t.get('depart_short', '')}".strip(),
+                    "arrive_border_short": t.get("arrive_border_short"),
+                    "arrive_buzim_short": t.get("arrive_buzim_short"),
+                    "border_wait_min": t.get("border_wait_min"),
+                    "border_cars": t.get("border_cars"),
+                    "total_label": t.get("total_label"),
+                    "route_id": "primary",
+                    "badge": "nächste beste",
+                }
+            )
+
+    if not candidates:
+        out = dict(payload)
+        out["timeline"] = []
+        out["top"] = []
+        out["best"] = None
+        out["best_low_border"] = None
+        out["advanced"] = True
+        return out
+
+    candidates.sort(key=sort_key)
+    new_best = dict(candidates[0])
+    old_depart = (payload.get("best") or {}).get("depart")
+    rolled = new_best.get("depart") != old_depart
+    if rolled:
+        new_best["badge"] = "nächste beste"
+    else:
+        new_best.setdefault(
+            "badge", (payload.get("best") or {}).get("badge") or "früheste Ankunft"
+        )
+
+    low = [
+        s
+        for s in candidates
+        if s.get("border_cars") is not None and float(s["border_cars"]) <= 3.5
+    ]
+    best_low = None
+    if low:
+        low_pick = sorted(low, key=sort_key)[0]
+        if low_pick.get("depart") != new_best.get("depart"):
+            best_low = dict(low_pick)
+            best_low["badge"] = "freie Grenze"
+
+    best_depart = new_best.get("depart")
+    timeline = []
+    for t in timeline_future:
+        row = dict(t)
+        row["is_best"] = row.get("depart") == best_depart
+        timeline.append(row)
+
+    out = dict(payload)
+    out["best"] = new_best
+    out["best_low_border"] = best_low
+    out["top"] = top_future if top_future else candidates[:10]
+    out["timeline"] = timeline
+    out["advanced"] = rolled
+    if rolled:
+        hint = (out.get("hint") or "").strip()
+        note = "Verpasste Abfahrt → automatisch nächste beste."
+        if note not in hint:
+            out["hint"] = f"{hint} {note}".strip() if hint else note
+    return out
 
 
 def optimize(
