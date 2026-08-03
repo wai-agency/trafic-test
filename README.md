@@ -129,7 +129,8 @@ traffic-monitor watch --interval 300 --console-only
 | autobahn.de | nein | Stau/Sperrungen A8/A7/… Korridor DE |
 | ASFINAG RSS | nein | AT-Meldungen (Karawanken/Tauern Keywords) |
 | promet.si JSON | nein* | SI Events (wenn Endpoint erreichbar) |
-| GPMaljevac | nein | News/Schlagzeilen Grenze & Korridor |
+| GPMaljevac | nein | RSS + Portal (Grenze/Korridor; gleiche Community wie FB) |
+| Facebook GPMaljevac | optional `FACEBOOK_PAGE_ACCESS_TOKEN` | Direkte Page-Posts via Graph API |
 | Nakordoni | optional Key | Live Wartezeiten HR↔BA |
 
 \* In manchen Netzen ist `promet.si` blockiert; der Monitor läuft trotzdem mit den anderen Quellen weiter.

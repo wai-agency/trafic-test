@@ -174,6 +174,10 @@ def _payload_from_alerts(
             {"label": "promet.si", "url": "https://www.promet.si/"},
             {"label": "HAK", "url": "https://www.hak.hr/info/stanje-na-cestama"},
             {"label": "GPMaljevac", "url": "https://gpmaljevac.com/"},
+            {
+                "label": "Facebook GPMaljevac",
+                "url": "https://www.facebook.com/GPMaljevac",
+            },
             {"label": "Nakordoni Grenze", "url": "https://nakordoni.eu/en/stat/16/17/4"},
         ],
         "recommend_md": recommend_departure(now),

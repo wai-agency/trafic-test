@@ -104,5 +104,11 @@ hak_cameras:
       analyze: false
       relevant: false
 
+# Facebook page «Granični prijelaz Maljevac» (same community as gpmaljevac.com).
+# Direct post fetch needs FACEBOOK_PAGE_ACCESS_TOKEN secret; RSS covers portal posts always.
+facebook_gpmaljevac:
+  page_id: "100064800966799"
+  page_url: "https://www.facebook.com/GPMaljevac"
+
 poll_interval_sec: 300
 cooldown_sec: 1800
