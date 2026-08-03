@@ -1,0 +1,12 @@
+services:
+  traffic-monitor:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./traffic_monitor/config:/app/traffic_monitor/config:ro
+      - ./data:/app/data
+    environment:
+      TRAFFIC_CONFIG: /app/traffic_monitor/config/watchpoints.yaml
+    command: ["traffic-monitor", "watch", "--interval", "300", "--state", "/app/data/alert_state.json"]
+    restart: unless-stopped

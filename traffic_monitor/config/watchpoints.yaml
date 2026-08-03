@@ -1,0 +1,76 @@
+# Watchpoints for Stuttgart → Bužim (via Karawanken + Maljevac)
+route:
+  from: Stuttgart
+  to: Bužim
+  via: "A8 → Salzburg → A10 Tauern → Villach → A11 Karawanken → SI-A2 → Zagreb → Maljevac → Velika Kladuša → Bužim"
+  approx_km: 930
+  free_flow_hours: 11
+
+# Keywords matched against ASFINAG / GPMaljevac / Promet texts
+keywords:
+  critical:
+    - karawanken
+    - karavanke
+    - karavanken
+    - tauern
+    - katschberg
+    - walserberg
+    - villach
+    - a10
+    - a11
+    - maljevac
+    - izačić
+    - izacic
+    - velika kladuša
+    - velika kladusa
+    - bužim
+    - buzim
+  congestion:
+    - stau
+    - stockender verkehr
+    - stockender
+    - kolona
+    - gužva
+    - guzva
+    - zastoj
+    - congestion
+    - queue
+    - waiting
+    - warteschlange
+    - vollsperre
+    - totalsperre
+    - gesperrt
+    - closed
+    - zaprt
+    - zatrpan
+
+# German Autobahn.de roads on the corridor
+autobahn_roads:
+  - A8
+  - A99
+
+# Bounding box roughly Stuttgart → Salzburg (lat, lon)
+autobahn_bbox:
+  min_lat: 47.35
+  max_lat: 49.0
+  min_lon: 9.0
+  max_lon: 13.1
+
+# Delay seconds on Autobahn.de before alerting
+autobahn_delay_threshold_sec: 600
+
+# Optional border IDs for Nakordoni (HR=16, BA=17, car=4)
+nakordoni:
+  origin: 16
+  destination: 17
+  crossing_type: 4
+  # Alert if estimated wait minutes >= this
+  wait_threshold_min: 45
+  name_filters:
+    - Maljevac
+    - Velika Kladuša
+    - Izačić
+    - Ličko Petrovo Selo
+
+poll_interval_sec: 300
+cooldown_sec: 1800
