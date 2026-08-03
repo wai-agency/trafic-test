@@ -170,8 +170,9 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
         return []
 
     cached = _load_cache()
-    if cached.get("alerts"):
-        console.print(f"[dim]HAK-Cam: Cache ({len(cached['alerts'])} verdicts)[/dim]")
+    if cached:
+        n = len(cached.get("alerts") or [])
+        console.print(f"[dim]HAK-Cam: Cache ({n} verdicts)[/dim]")
         return _alerts_from_cache(cached)
 
     api_key = env("GEMINI_API_KEY")
@@ -203,7 +204,13 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                 console.print(f"[yellow]HAK-Cam {cam_id}: HTTP {exc}[/yellow]")
                 continue
             except ValueError as exc:
-                console.print(f"[yellow]HAK-Cam {cam_id}: {exc}[/yellow]")
+                msg = str(exc)
+                console.print(f"[yellow]HAK-Cam {cam_id}: {msg}[/yellow]")
+                if "429" in msg:
+                    # Stop further Gemini calls this run; cool down cache
+                    _save_cache([], model)
+                    console.print("[yellow]HAK-Cam: Gemini Quota/Rate-Limit — später erneut[/yellow]")
+                    return alerts
                 continue
             if verdict is None:
                 console.print(f"[yellow]HAK-Cam {cam_id}: leere/ungültige KI-Antwort[/yellow]")
@@ -255,8 +262,7 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                     },
                 )
             )
-    if alerts:
-        _save_cache(alerts, model)
+    _save_cache(alerts, model)
     return alerts
 
 
