@@ -389,6 +389,11 @@ def render_html(payload: dict) -> str:
         hero_bih = (
             f"{mj['cars']} Autos · ~{wait} min" if wait is not None else f"{mj['cars']} Autos"
         )
+        bih_sev = _queue_sev_key(mj)
+        hr_sev = "empty"
+    else:
+        bih_sev = _queue_sev_key(mj.get("to_bih"))
+        hr_sev = _queue_sev_key(mj.get("to_hr"))
 
     return f"""<!doctype html>
 <html lang="de">
@@ -489,6 +494,18 @@ def render_html(payload: dict) -> str:
     .status-critical .dot {{ background: #ff7b72; }}
     .status-warning .dot {{ background: #ffb020; }}
     .status-clear .dot {{ background: #6dffb0; }}
+    .hero.status-critical {{
+      background:
+        linear-gradient(135deg, rgba(148, 42, 36, 0.97), rgba(88, 28, 26, 0.94) 52%, rgba(170, 78, 38, 0.9));
+    }}
+    .hero.status-warning {{
+      background:
+        linear-gradient(135deg, rgba(150, 92, 22, 0.96), rgba(96, 54, 18, 0.93) 55%, rgba(176, 112, 28, 0.9));
+    }}
+    .hero.status-clear {{
+      background:
+        linear-gradient(135deg, rgba(24, 110, 88, 0.96), rgba(18, 72, 60, 0.93) 55%, rgba(40, 120, 90, 0.88));
+    }}
     @keyframes pulse {{
       0% {{ box-shadow: 0 0 0 0 rgba(255,255,255,0.45); }}
       70% {{ box-shadow: 0 0 0 14px rgba(255,255,255,0); }}
@@ -506,6 +523,23 @@ def render_html(payload: dict) -> str:
       border: 1px solid rgba(255,255,255,0.18);
       border-radius: 16px;
       padding: 12px;
+    }}
+    .metric.sev-critical {{
+      background: rgba(255, 110, 100, 0.22);
+      border-color: rgba(255, 170, 160, 0.45);
+    }}
+    .metric.sev-warning {{
+      background: rgba(255, 180, 70, 0.2);
+      border-color: rgba(255, 210, 140, 0.42);
+    }}
+    .metric.sev-clear {{
+      background: rgba(109, 255, 176, 0.16);
+      border-color: rgba(150, 255, 200, 0.35);
+    }}
+    .metric.sev-empty {{
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.12);
+      opacity: 0.85;
     }}
     .metric span {{ display: block; font-size: 0.75rem; opacity: 0.8; }}
     .metric strong {{
@@ -910,6 +944,24 @@ def render_html(payload: dict) -> str:
       border: 1px solid rgba(215,199,161,0.75);
       box-shadow: var(--shadow);
     }}
+    .border-now.is-critical {{
+      background:
+        radial-gradient(700px 260px at 0% 0%, rgba(180, 55, 45, 0.16), transparent 55%),
+        linear-gradient(160deg, #fff5f2 0%, #f6ebe6 100%);
+      border-color: rgba(180, 70, 55, 0.35);
+    }}
+    .border-now.is-warning {{
+      background:
+        radial-gradient(700px 260px at 0% 0%, rgba(196, 122, 18, 0.2), transparent 55%),
+        linear-gradient(160deg, #fff8eb 0%, #f4ead8 100%);
+      border-color: rgba(181, 71, 8, 0.28);
+    }}
+    .border-now.is-clear {{
+      background:
+        radial-gradient(700px 260px at 0% 0%, rgba(31, 107, 87, 0.14), transparent 55%),
+        linear-gradient(160deg, #f3faf6 0%, #e8f1ec 100%);
+      border-color: rgba(31, 107, 87, 0.28);
+    }}
     .border-now h2 {{ margin-bottom: 6px; }}
     .border-sides {{
       display: grid;
@@ -918,10 +970,41 @@ def render_html(payload: dict) -> str:
       margin-top: 14px;
     }}
     .border-side {{
+      position: relative;
       background: rgba(255,255,255,0.65);
       border: 1px solid var(--line);
       border-radius: 16px;
-      padding: 14px 12px;
+      padding: 14px 12px 14px 14px;
+      border-left-width: 5px;
+      transition: background 0.25s ease, border-color 0.25s ease;
+    }}
+    .border-side.sev-critical {{
+      background: linear-gradient(135deg, #fff0ee 0%, #fde4e0 100%);
+      border-color: #e8b4ae;
+      border-left-color: var(--critical);
+    }}
+    .border-side.sev-warning {{
+      background: linear-gradient(135deg, #fff6e8 0%, #fce9cc 100%);
+      border-color: #e8c99a;
+      border-left-color: var(--warning);
+    }}
+    .border-side.sev-clear {{
+      background: linear-gradient(135deg, #eef8f3 0%, #ddeee6 100%);
+      border-color: #b7d4c8;
+      border-left-color: var(--clear);
+    }}
+    .border-side.sev-empty {{
+      background: rgba(255,255,255,0.45);
+      border-color: #ddd4c0;
+      border-left-color: #b8b0a0;
+      opacity: 0.88;
+    }}
+    .side-head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
     }}
     .side-kicker {{
       display: block;
@@ -930,8 +1013,23 @@ def render_html(payload: dict) -> str:
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      margin-bottom: 6px;
     }}
+    .side-sev {{
+      flex-shrink: 0;
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #ece7da;
+      color: var(--muted);
+    }}
+    .side-sev.sev-critical {{ background: #f8d7d4; color: var(--critical); }}
+    .side-sev.sev-warning {{ background: #fce7c8; color: var(--warning); }}
+    .side-sev.sev-clear {{ background: #ddece7; color: var(--clear); }}
+    .side-sev.sev-empty {{ background: #ebe6da; color: #6a6558; }}
     .side-cars {{
       display: block;
       font-family: "Fraunces", Georgia, serif;
@@ -939,6 +1037,9 @@ def render_html(payload: dict) -> str:
       letter-spacing: -0.03em;
       line-height: 1.1;
     }}
+    .border-side.sev-critical .side-cars {{ color: var(--critical); }}
+    .border-side.sev-warning .side-cars {{ color: var(--warning); }}
+    .border-side.sev-clear .side-cars {{ color: var(--clear); }}
     .side-cars small {{
       font-family: "Manrope", system-ui, sans-serif;
       font-size: 0.72rem;
@@ -965,6 +1066,10 @@ def render_html(payload: dict) -> str:
     .stale-tag {{ color: var(--warning); font-size: 0.72rem; font-weight: 800; }}
     @media (max-width: 520px) {{
       .border-sides {{ grid-template-columns: 1fr; }}
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+      .dot {{ animation: none; }}
+      .border-side {{ transition: none; }}
     }}
     .lightbox {{
       position: fixed; inset: 0; z-index: 1000;
@@ -1048,11 +1153,11 @@ def render_html(payload: dict) -> str:
       <p class="status-pill"><span class="dot" aria-hidden="true"></span>{html.escape(payload["status_label"])}</p>
       <p class="hint">{html.escape(payload["status_hint"])}</p>
       <div class="metrics">
-        <div class="metric">
+        <div class="metric sev-{html.escape(bih_sev)}">
           <span>Einfahrt BiH</span>
           <strong>{html.escape(hero_bih)}</strong>
         </div>
-        <div class="metric">
+        <div class="metric sev-{html.escape(hr_sev)}">
           <span>Einfahrt HR</span>
           <strong>{html.escape(hero_hr)}</strong>
         </div>
@@ -1233,6 +1338,51 @@ def render_html(payload: dict) -> str:
 """
 
 
+def _queue_sev_key(side: dict | None) -> str:
+    """Map a Maljevac side payload to a UI severity key."""
+    if not side:
+        return "empty"
+    sev = (side.get("severity") or "").lower()
+    if sev == "critical":
+        return "critical"
+    if sev == "warning":
+        return "warning"
+    if sev in {"clear", "info"}:
+        return "clear"
+    wait = side.get("wait_min")
+    cars = side.get("cars")
+    if wait is not None and wait >= 45:
+        return "critical"
+    if cars is not None and cars >= 20:
+        return "critical"
+    if wait is not None and wait >= 15:
+        return "warning"
+    if cars is not None and cars >= 5:
+        return "warning"
+    if cars is not None or wait is not None:
+        return "clear"
+    return "empty"
+
+
+def _queue_sev_label(sev: str) -> str:
+    return {
+        "critical": "Stau",
+        "warning": "Erhöht",
+        "clear": "Frei",
+        "empty": "Offen",
+    }.get(sev, "Offen")
+
+
+def _worst_queue_sev(*sides: dict | None) -> str:
+    rank = {"critical": 3, "warning": 2, "clear": 1, "empty": 0}
+    worst = "empty"
+    for side in sides:
+        key = _queue_sev_key(side)
+        if rank[key] > rank[worst]:
+            worst = key
+    return worst
+
+
 def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
     if not maljevac_now:
         return """
@@ -1243,10 +1393,15 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
     """
 
     def side_card(title: str, side: dict | None) -> str:
+        sev = _queue_sev_key(side)
+        label = _queue_sev_label(sev)
         if not side:
             return f"""
-            <div class="border-side">
-              <span class="side-kicker">{html.escape(title)}</span>
+            <div class="border-side sev-{html.escape(sev)}" data-severity="{html.escape(sev)}">
+              <div class="side-head">
+                <span class="side-kicker">{html.escape(title)}</span>
+                <span class="side-sev sev-{html.escape(sev)}">{html.escape(label)}</span>
+              </div>
               <strong class="side-cars">—</strong>
               <span class="side-meta">noch keine Zählung</span>
             </div>
@@ -1260,8 +1415,11 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
         end_l = "" if side.get("queue_end_visible") is not False else " · Ende nicht sichtbar"
         note = html.escape((side.get("note") or "")[:110])
         return f"""
-            <div class="border-side">
-              <span class="side-kicker">{html.escape(title)}</span>
+            <div class="border-side sev-{html.escape(sev)}" data-severity="{html.escape(sev)}">
+              <div class="side-head">
+                <span class="side-kicker">{html.escape(title)}</span>
+                <span class="side-sev sev-{html.escape(sev)}">{html.escape(label)}</span>
+              </div>
               <strong class="side-cars">{html.escape(cars_l)} <small>Autos</small></strong>
               <span class="side-meta">Wartezeit {html.escape(wait_l)}{html.escape(trucks_l)}{html.escape(end_l)}</span>
               {"<span class='side-note'>" + note + "</span>" if note else ""}
@@ -1270,6 +1428,7 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
 
     to_bih = maljevac_now.get("to_bih")
     to_hr = maljevac_now.get("to_hr")
+    section_sev = _worst_queue_sev(to_bih, to_hr)
     source = html.escape(str(maljevac_now.get("source") or "HAK-Cam"))
 
     # Optional Nakordoni reference row (not primary)
@@ -1287,7 +1446,7 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
         break
 
     return f"""
-    <section class="border-now" aria-labelledby="border-title">
+    <section class="border-now is-{html.escape(section_sev)}" aria-labelledby="border-title">
       <h2 id="border-title">Maljevac jetzt</h2>
       <p class="empty" style="margin:0">Live gezählt von HAK-Kameras · {source}</p>
       <div class="border-sides">

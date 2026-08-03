@@ -33,6 +33,7 @@ def _base_payload(**overrides):
                 "cars": 10,
                 "wait_min": 15,
                 "trucks": 1,
+                "severity": "warning",
                 "cam_id": 430,
                 "note": "Kurze Schlange Richtung BiH",
             },
@@ -42,6 +43,7 @@ def _base_payload(**overrides):
                 "cars": 4,
                 "wait_min": 8,
                 "trucks": 0,
+                "severity": "info",
                 "cam_id": 429,
                 "note": "Wenig Verkehr Richtung HR",
             },
@@ -82,6 +84,54 @@ def test_render_html_contains_brand_and_status():
     assert ">10<" in html or "10 Autos" in html
     assert ">4<" in html or "4 Autos" in html
     assert "HAK-Cam" in html
+    assert 'border-side sev-warning' in html
+    assert 'border-side sev-clear' in html
+    assert 'metric sev-warning' in html
+    assert 'metric sev-clear' in html
+    assert "side-sev sev-warning" in html
+    assert ">Erhöht<" in html
+    assert ">Frei<" in html
+    assert "border-now is-warning" in html
+
+
+def test_render_html_critical_severity_styling():
+    html = render_html(
+        _base_payload(
+            status="critical",
+            status_label="Stau / Störung",
+            maljevac_now={
+                "name": "Maljevac",
+                "cars": 23,
+                "wait_min": 69,
+                "source": "HAK-Cam · gpt-5-nano",
+                "note": "Live",
+                "stale": False,
+                "to_bih": {
+                    "name": "Ausreise",
+                    "cars": 23,
+                    "wait_min": 69,
+                    "trucks": 0,
+                    "severity": "critical",
+                    "queue_end_visible": False,
+                    "note": "Worst Case",
+                },
+                "to_hr": {
+                    "name": "Einreise",
+                    "cars": 2,
+                    "wait_min": 5,
+                    "trucks": 0,
+                    "severity": "info",
+                },
+            },
+        )
+    )
+    assert "hero status-critical" in html
+    assert "border-now is-critical" in html
+    assert "border-side sev-critical" in html
+    assert "metric sev-critical" in html
+    assert ">Stau<" in html
+    assert "border-side sev-clear" in html
+    assert ">Frei<" in html
 
 
 def test_render_html_perfect_block():
