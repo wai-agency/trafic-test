@@ -58,8 +58,9 @@ jobs:
             .traffic_alert_state.json
             .camera_ai_cache.json
             site/perfect.json
-          key: traffic-state-v3-${{ github.run_id }}
+          key: traffic-state-v4-${{ github.run_id }}
           restore-keys: |
+            traffic-state-v4-
             traffic-state-v3-
             traffic-state-v2-
             traffic-alert-state-

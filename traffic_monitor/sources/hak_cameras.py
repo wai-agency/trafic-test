@@ -28,21 +28,39 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
+# Bump when vision prompt / post-processing changes so CI cache is not reused.
+_PROMPT_VERSION = 3
+
 _PROMPT = (
-    "Du bist ein Verkehrsanalyst. Das Bild ist eine Live-Grenzkamera an der "
-    "kroatisch-bosnischen Grenze. Schaetze die Lage in der angegebenen "
-    "Fahrtrichtung. Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
+    "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien). "
+    "Analysiere NUR die angegebene Fahrtrichtung.\n\n"
+    "Zaehlregeln (wichtig):\n"
+    "1) Zaehle ALLE Fahrzeuge in der Schlange — auch kleine, unscharfe, weit hinten "
+    "am Horizont oder am Bildrand. Hintere Autos zaehlen voll mit.\n"
+    "2) Pruefe ob das ENDE der Kolonne sichtbar ist. Wenn die Schlange am oberen/"
+    "hinteren Bildrand weitergeht, Kurve/Huegel verdeckt, oder Autos immer noch "
+    "dichter werden ohne sichtbares Ende → queue_end_visible=false.\n"
+    "3) Wenn queue_end_visible=false: Schaetze die GESAMTE Kolonne (sichtbar + "
+    "unsichtbar hinter dem Bild). vehicles darf NICHT nur die klaren Nahfahrzeuge "
+    "sein. Wartezeit und severity entsprechend hoeher ansetzen.\n"
+    "4) Stau/Kolonne = wartende oder stockende Fahrzeuge in Richtung Grenze, "
+    "nicht nur fliessender Vorbeifahrt-Verkehr quer zur Kamera.\n\n"
+    "Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
     "{"
-    "\"vehicles\": <int wartende Fahrzeuge in der aktiven Schlange>, "
+    "\"vehicles\": <int geschaetzte PKW/Transporter in der gesamten Schlange>, "
     "\"trucks\": <int LKW sichtbar>, "
     "\"wait_min\": <int geschaetzte Wartezeit Minuten>, "
+    "\"queue_end_visible\": <true|false>, "
     "\"severity\": \"clear\"|\"warning\"|\"critical\", "
     "\"weather\": \"sunny|cloudy|rain|fog|night|unknown\", "
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
-    "\"summary\": \"<kurze deutsche Lagebeschreibung>\" "
-    "}. "
-    "Richtwerte: unter 5 Fahrzeuge = clear, 5-15 = warning, ueber 15 = critical. "
-    "Wenn keine Fahrzeuge erkennbar sind, severity=clear."
+    "\"summary\": \"<kurze deutsche Lagebeschreibung, erwaehne wenn Kolonnenende nicht sichtbar>\" "
+    "}.\n"
+    "Richtwerte severity: unter 5 und Ende sichtbar = clear; "
+    "5-15 oder Ende nicht sichtbar = mindestens warning; "
+    "ueber 15 oder lange unsichtbare Fortsetzung = critical. "
+    "Wenn queue_end_visible=false und mind. einige Autos sichtbar: wait_min mindestens 25. "
+    "Nur wenn wirklich kaum/keine Fahrzeuge und freie Fahrbahn: severity=clear."
 )
 
 
@@ -113,6 +131,8 @@ def _load_cache() -> dict:
         return {}
     if time.time() - float(data.get("ts") or 0) > _CACHE_TTL_SEC:
         return {}
+    if int(data.get("prompt_v") or 0) != _PROMPT_VERSION:
+        return {}
     return data
 
 
@@ -120,6 +140,7 @@ def _save_cache(alerts: list[Alert], model: str) -> None:
     payload = {
         "ts": time.time(),
         "model": model,
+        "prompt_v": _PROMPT_VERSION,
         "alerts": [
             {
                 "severity": a.severity,
@@ -235,6 +256,8 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                 detail_bits.append(f"LKW ~{verdict['trucks']}")
             if wait is not None:
                 detail_bits.append(f"Wartezeit ~{wait} min")
+            if verdict.get("queue_end_visible") is False:
+                detail_bits.append("Kolonnenende nicht sichtbar")
             if verdict.get("weather"):
                 detail_bits.append(f"Wetter: {verdict['weather']}")
             if verdict.get("road"):
@@ -261,6 +284,7 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                         "trucks": verdict.get("trucks"),
                         "weather": verdict.get("weather"),
                         "road": verdict.get("road"),
+                        "queue_end_visible": verdict.get("queue_end_visible"),
                         "relevant": bool(cam.get("relevant", False)),
                     },
                 )
@@ -321,7 +345,8 @@ def _analyze_with_openai(
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:image/jpeg;base64,{b64}",
-                            "detail": "low",
+                            # high: distant / tiny cars at the back of the queue
+                            "detail": "high",
                         },
                     },
                 ],
@@ -385,6 +410,37 @@ def normalize_verdict(text: str | dict) -> dict | None:
             out[key] = int(value) if value is not None else None
         except (TypeError, ValueError):
             out[key] = None
+
+    raw_end = verdict.get("queue_end_visible", True)
+    if isinstance(raw_end, str):
+        end_visible = raw_end.strip().lower() in ("true", "1", "yes", "ja", "sichtbar")
+    else:
+        end_visible = bool(raw_end) if raw_end is not None else True
+    out["queue_end_visible"] = end_visible
+
+    # Safety floor: if the queue continues beyond the frame, never treat as "frei"
+    cars = out.get("vehicles") or 0
+    if not end_visible and cars > 0:
+        if _SEV_RANK.get(out["severity"], 0) < _SEV_RANK["warning"]:
+            out["severity"] = "warning"
+        wait = out.get("wait_min")
+        if wait is None or wait < 25:
+            out["wait_min"] = 25
+        # Prefer stockend/dicht wording when end is cut off
+        if out.get("road") in ("frei", "flüssig", "unbekannt"):
+            out["road"] = "stockend"
+        summary = out.get("summary") or ""
+        if "ende" not in summary.lower() and "kolonne" not in summary.lower():
+            out["summary"] = (
+                (summary + " " if summary else "")
+                + "Kolonnenende nicht sichtbar — Stau vermutlich länger."
+            ).strip()
+        # If many cars AND end not visible → critical
+        if cars >= 12 and _SEV_RANK.get(out["severity"], 0) < _SEV_RANK["critical"]:
+            out["severity"] = "critical"
+            if (out.get("wait_min") or 0) < 40:
+                out["wait_min"] = 40
+
     return out
 
 

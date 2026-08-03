@@ -39,7 +39,8 @@ def test_parse_openai_plain_json():
     v = hc.parse_vision_response(
         _openai_payload(
             '{"vehicles": 12, "trucks": 1, "wait_min": 40, "severity": "warning", '
-            '"weather": "sunny", "road": "stockend", "summary": "Mittlere Kolonne"}'
+            '"weather": "sunny", "road": "stockend", "summary": "Mittlere Kolonne", '
+            '"queue_end_visible": true}'
         )
     )
     assert v["severity"] == "warning"
@@ -48,6 +49,37 @@ def test_parse_openai_plain_json():
     assert v["wait_min"] == 40
     assert v["weather"] == "sunny"
     assert v["road"] == "stockend"
+    assert v["queue_end_visible"] is True
+
+
+def test_queue_end_not_visible_raises_floor():
+    v = hc.parse_vision_response(
+        _openai_payload(
+            '{"vehicles": 8, "trucks": 1, "wait_min": 10, "severity": "clear", '
+            '"weather": "sunny", "road": "flüssig", "summary": "Ein paar Autos", '
+            '"queue_end_visible": false}'
+        )
+    )
+    assert v["queue_end_visible"] is False
+    assert v["severity"] == "warning"
+    assert v["wait_min"] >= 25
+    assert v["road"] == "stockend"
+    assert "Kolonnenende" in v["summary"] or "ende" in v["summary"].lower()
+
+
+def test_queue_end_not_visible_many_cars_critical():
+    v = hc.normalize_verdict(
+        {
+            "vehicles": 18,
+            "wait_min": 20,
+            "severity": "warning",
+            "road": "dicht",
+            "summary": "Lange Schlange",
+            "queue_end_visible": False,
+        }
+    )
+    assert v["severity"] == "critical"
+    assert v["wait_min"] >= 40
 
 
 def test_parse_openai_fenced_json():
