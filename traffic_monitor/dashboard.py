@@ -454,6 +454,20 @@ def render_html(payload: dict) -> str:
     .updated {{
       color: var(--muted); font-size: 0.78rem; white-space: nowrap;
     }}
+    .updated.is-stale {{ color: #9a3412; font-weight: 700; }}
+    .stale-banner {{
+      display: none;
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid #f0c2a0;
+      background: linear-gradient(135deg, #fff7ed, #ffedd5);
+      color: #9a3412;
+      font-size: 0.92rem;
+      line-height: 1.35;
+    }}
+    .stale-banner.is-visible {{ display: block; }}
+    .stale-banner strong {{ font-weight: 700; }}
     .hero {{
       position: relative;
       overflow: hidden;
@@ -1146,8 +1160,9 @@ def render_html(payload: dict) -> str:
   <main class="wrap">
     <div class="brand-row">
       <h1 class="brand">{html.escape(payload["brand"])}</h1>
-      <div class="updated">Update<br/>{html.escape(payload["generated_label"])}</div>
+      <div class="updated" id="updated-stamp" data-generated-at="{html.escape(payload["generated_at"])}">Update<br/>{html.escape(payload["generated_label"])}</div>
     </div>
+    <div class="stale-banner" id="stale-banner" role="status" aria-live="polite"></div>
 
     <header class="hero status-{html.escape(payload["status"])}">
       <p class="route-kicker">{html.escape(payload["from"])} → {html.escape(payload["to"])}</p>
@@ -1197,7 +1212,7 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Kameras live · KI alle 20 Min · Perfect + HAK HD + OpenAI Vision (Terra)</footer>
+    <footer>BuzimLine · Kameras live · KI/Perfect per GitHub Actions (oft verzögert) · HAK HD + OpenAI Vision (Terra)</footer>
   </main>
   <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
     <div class="lightbox-inner">
@@ -1208,10 +1223,38 @@ def render_html(payload: dict) -> str:
   </div>
   <script type="application/json" id="payload">{payload_json}</script>
   <script>
-    const mins = 20;
-    setTimeout(() => location.reload(), mins * 60 * 1000);
+    // Page reload alone cannot refresh KI/Perfect if Actions cron was skipped.
+    setTimeout(() => location.reload(), 20 * 60 * 1000);
 
-    // Live HAK stills on the dashboard (~10s). KI analysis stays on the 20-min server cycle.
+    (function staleMonitorBanner() {{
+      const stamp = document.getElementById('updated-stamp');
+      const banner = document.getElementById('stale-banner');
+      if (!stamp || !banner) return;
+      const raw = stamp.getAttribute('data-generated-at');
+      if (!raw) return;
+      const generated = Date.parse(raw);
+      if (Number.isNaN(generated)) return;
+      const STALE_MS = 45 * 60 * 1000;
+      function tick() {{
+        const ageMin = Math.max(0, Math.round((Date.now() - generated) / 60000));
+        if (Date.now() - generated < STALE_MS) {{
+          banner.classList.remove('is-visible');
+          banner.textContent = '';
+          stamp.classList.remove('is-stale');
+          return;
+        }}
+        stamp.classList.add('is-stale');
+        banner.classList.add('is-visible');
+        banner.innerHTML = '<strong>Daten veraltet</strong> · letzter Monitor-Lauf vor '
+          + ageMin + ' Min. GitHub Actions-Cron verzögert oft. '
+          + 'Kamerabilder unten sind trotzdem live. '
+          + 'Frisch laden: Actions → Traffic Monitor → Run workflow.';
+      }}
+      tick();
+      setInterval(tick, 30000);
+    }})();
+
+    // Live HAK stills on the dashboard (~10s). KI analysis stays on the server cycle.
     (function liveCameraFeed() {{
       const REFRESH_MS = 10000;
 

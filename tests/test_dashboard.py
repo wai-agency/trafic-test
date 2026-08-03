@@ -76,6 +76,9 @@ def test_render_html_contains_brand_and_status():
     assert "Karawanken Hinweis" in html
     assert 'name="viewport"' in html
     assert "viewport-fit=cover" in html
+    assert 'id="stale-banner"' in html
+    assert 'data-generated-at="2026-08-03T08:00:00+02:00"' in html
+    assert "Daten veraltet" in html
     assert "Maljevac jetzt" in html
     assert "Einfahrt BiH (HR → BiH)" in html
     assert "Einfahrt HR (BiH → HR)" in html

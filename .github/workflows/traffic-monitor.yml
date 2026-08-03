@@ -4,8 +4,11 @@ on:
   push:
     branches: [main]
   schedule:
-    # ~alle 20 Min; OpenAI Vision zusätzlich per Cache TTL (~20 Min) gedrosselt
-    - cron: "*/20 * * * *"
+    # GitHub cron is best-effort and often skips/delays */20 jobs for hours.
+    # Two offset cadences (~every 20 min each) raise the odds of a timely run.
+    # OpenAI Vision is additionally throttled by cache TTL (~20 Min).
+    - cron: "7,27,47 * * * *"
+    - cron: "17,37,57 * * * *"
   workflow_dispatch:
     inputs:
       min_severity:
