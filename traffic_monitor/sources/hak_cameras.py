@@ -3,7 +3,7 @@
 The live camera JPEGs live under ``https://m.hak.hr/cam.asp?id=<id>``. They are
 always surfaced in the dashboard (no key needed). When an ``OPENAI_API_KEY`` is
 configured, each analysed camera image is sent to OpenAI vision
-(default ``gpt-5-nano``) to estimate queue length / wait time and enrich routing.
+(default ``gpt-4o``) to estimate queue length / wait time and enrich routing.
 """
 
 from __future__ import annotations
@@ -23,56 +23,45 @@ from traffic_monitor.models import Alert
 console = Console()
 
 HAK_REFERER = "https://m.hak.hr/"
-DEFAULT_MODEL = "gpt-5-nano"
+DEFAULT_MODEL = "gpt-4o"
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 10
+_PROMPT_VERSION = 11
 
 _PROMPT = (
     "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
     "Analysiere NUR die angegebene Fahrtrichtung.\n\n"
+    "ZAEHL-METHODE (wichtig):\n"
+    "• Gehe die Kolonne Auto fuer Auto von vorne nach hinten durch — nicht schaetzen aus dem Bauch.\n"
+    "• Bei dichter Kolonne bis zu den Kabinen sind oft 15–30 PKW sichtbar; unterschätze nicht.\n"
+    "• Zuerst vehicles_visible (klar erkennbare Autos), dann vehicles (Schaetzung nur wenn Ende "
+    "abgeschnitten ist).\n\n"
     "HARTE REGEL — nur Einfahrt-/Wartespur der genannten Richtung:\n"
-    "• vehicles_visible = exakte Anzahl PKW/Transporter, die du klar in DER einen aktiven "
-    "Spur der genannten Fahrtrichtung siehst (Pfeil/Markierung BiH oder HR).\n"
-    "• vehicles = Schaetzung der gesamten Warteschlange in dieser Spur "
-    "(= vehicles_visible, wenn Ende sichtbar; sonst leichte Aufschlagschaetzung).\n"
-    "• NIEMALS mitzaehlen: Gegenrichtung, Parkplaetze, abgestellte Autos hinter "
-    "Pollern/Absperrung, Parkbuchten rechts/links, Schatten, Gebaeude.\n"
-    "• Beispiel Maljevac Cam 429 (BiH->HR): zaehle NUR Autos Richtung Kamera unter "
-    "\"▼ HR ▼\". Die Kolonne Richtung BiH im Hintergrund und Parkplaetze zaehlen NICHT.\n"
-    "• Beispiel Maljevac Cam 430 (HR->BiH): zaehle NUR die Kolonne Richtung Kabinen unter "
-    "\"▼ BiH ▼\". Die HR-Spur und der Parkplatz rechts zaehlen NICHT.\n"
-    "• LKW: Feld trucks, nicht in vehicles/vehicles_visible.\n"
-    "• Wenige sichtbare Autos (0–4) in der richtigen Spur = kurze Lage — "
-    "NICHT kuenstlich auf grosse Zahlen aufblasen.\n\n"
+    "• NIEMALS: Gegenrichtung, Parkplaetze, abgestellte Autos, Schatten, Gebaeude.\n"
+    "• LKW: Feld trucks, nicht in vehicles/vehicles_visible.\n\n"
     "Kolonnenende:\n"
-    "• queue_end_visible=true wenn das letzte wartende Auto der genannten Spur klar ist "
-    "ODER die Spur frei/nahezu frei wirkt (0–2 Autos, klare Luecken).\n"
-    "• queue_end_visible=false NUR bei dichter Kolonne, die am Bildrand/in die Ferne "
-    "weitergeht und du unsicher bist ob noch mehr kommt.\n"
-    "• Bei kurzer/leichter Lage (wenige Autos, freie Abschnitte) → true, nicht Worst Case.\n"
-    "• Wenn queue_end_visible=false UND dichte Kolonne (≥5 sichtbar): leichte Aufschlagschaetzung "
-    "auf vehicles (ca. +30–60%%, nicht wild verdoppeln), wait_min erhoehen, severity=critical.\n\n"
+    "• queue_end_visible=true wenn letztes Auto klar ODER Spur frei/nahezu frei (0–2 Autos).\n"
+    "• queue_end_visible=false nur bei dichter Kolonne, die am Bildrand weitergeht.\n"
+    "• Bei dichter Kolonne mit unsicherem Ende: leichte Aufschlagschaetzung (+20–40%%), "
+    "nicht wild verdoppeln und nicht unter vehicles_visible gehen.\n\n"
     "Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
     "{"
     "\"vehicles_visible\": <int klar sichtbare Autos in der genannten Spur>, "
     "\"vehicles\": <int Schaetzung Warteschlange nur dieser Spur>, "
-    "\"trucks\": <int LKW in/neben der Spur>, "
+    "\"trucks\": <int LKW>, "
     "\"wait_min\": <int Minuten>, "
     "\"queue_end_visible\": <true|false>, "
-    "\"parked_ignored\": <int parkende Autos bewusst NICHT gezaehlt>, "
+    "\"parked_ignored\": <int>, "
     "\"severity\": \"clear\"|\"warning\"|\"critical\", "
     "\"weather\": \"sunny|cloudy|rain|fog|night|unknown\", "
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
     "\"summary\": \"<kurz deutsch>\" "
     "}.\n"
-    "Wenn Ende klar sichtbar / kurze Lage: unter 5 Autos = clear; 5-20 = warning; "
-    "ueber 20 = critical; Wartezeit ~2–3 min pro Auto. "
-    "Wenn Ende NICHT sichtbar bei dichter Kolonne: critical / laengerer Stau — "
-    "aber vehicles bleibt nah an vehicles_visible (kein Fantasie-Stau bei leerem Bild)."
+    "Severity: unter 5 Autos = clear; 5-20 = warning; ueber 20 = critical; "
+    "Wartezeit ~2–3 min pro Auto in der aktiven Spur."
 )
 
 
@@ -234,7 +223,13 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
             try:
                 image = _download_image(client, cam_id)
                 verdict = _analyze_with_openai(
-                    client, image, api_key, model, name, cam.get("direction", "")
+                    client,
+                    image,
+                    api_key,
+                    model,
+                    name,
+                    cam.get("direction", ""),
+                    count_hint=str(cam.get("count_hint") or ""),
                 )
             except httpx.HTTPError as exc:
                 console.print(f"[yellow]HAK-Cam {cam_id}: HTTP {exc}[/yellow]")
@@ -348,9 +343,13 @@ def _analyze_with_openai(
     model: str,
     name: str,
     direction: str,
+    count_hint: str = "",
 ) -> dict | None:
     b64 = base64.b64encode(image).decode("ascii")
     prompt = _PROMPT + f"\nKamera: {name}. Fahrtrichtung: {direction or 'unbekannt'}."
+    hint = (count_hint or "").strip()
+    if hint:
+        prompt += f"\n\nKAMERA-SPEZIFISCH:\n{hint}"
     body: dict = {
         "model": model,
         "response_format": {"type": "json_object"},
@@ -459,6 +458,9 @@ def normalize_verdict(text: str | dict) -> dict | None:
     if visible is not None:
         out["vehicles_visible"] = visible
     if out.get("vehicles") is None and visible is not None:
+        out["vehicles"] = visible
+    # Never report fewer cars than clearly visible
+    if visible is not None and out.get("vehicles") is not None and out["vehicles"] < visible:
         out["vehicles"] = visible
 
     # Default false: missing/ambiguous end → worst case (do not assume "frei")

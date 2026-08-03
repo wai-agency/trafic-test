@@ -82,7 +82,8 @@ nakordoni:
 hak_cameras:
   page: "https://m.hak.hr/kamera.asp?g=2&k=177"
   # OpenAI vision model for queue counting. Override via OPENAI_VISION_MODEL env.
-  model: gpt-5-nano
+  # gpt-4o counts dense Maljevac queues much more reliably than gpt-5-nano.
+  model: gpt-4o
   # Only alert from AI verdicts at/above this severity.
   analyze_min_severity: warning
   cams:
@@ -92,12 +93,24 @@ hak_cameras:
       relevant: true
       analyze: true
       role: "to_bih"
+      # Geometry for vision: booths/blue canopy = background.
+      count_hint: >
+        Cam 430: Zaehle NUR die dichte Kolonne in der Mitte / links-mitte Richtung
+        Grenzkabinen (blaue Ueberdachung im Hintergrund). Das ist HR→BiH.
+        Markierung oft "▼ BiH ▼" bzw. Fahrspur zur Kabine. NICHT die Gegenrichtung
+        (Richtung Kamera / "▲ HR ▲"). NICHT den Parkplatz rechts (Vans/schraege Reihe).
+        Dichte Kolonnen hier oft 15–30 Autos — einzeln von vorne nach hinten zaehlen.
     - id: 429
       name: "Maljevac — Einreise BiH → HR"
       direction: "BiH->HR"
       relevant: true
       analyze: true
       role: "to_hr"
+      count_hint: >
+        Cam 429: Zaehle NUR Autos Richtung Kamera in der Spur mit "▼ HR ▼"
+        (BiH→HR / Einreise HR). NICHT die Kolonne Richtung Kabinen mit "▲ BiH ▲".
+        NICHT Parkplaetze links/rechts. Wenn die HR-Spur fast leer ist, vehicles_visible
+        nahe 0–3 melden — nicht die BiH-Kolonne mitzaehlen.
     - id: 406
       name: "Velika Kladuša (BiH)"
       direction: "BiH"
