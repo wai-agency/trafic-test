@@ -74,6 +74,7 @@ jobs:
           TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_VISION_MODEL: ${{ secrets.OPENAI_VISION_MODEL }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
           MIN_SEVERITY: ${{ github.event.inputs.min_severity || 'warning' }}
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
         run: |
@@ -140,6 +141,7 @@ jobs:
           TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_VISION_MODEL: ${{ secrets.OPENAI_VISION_MODEL }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
         run: traffic-monitor dashboard --out site
 
       - name: Upload dashboard artifact

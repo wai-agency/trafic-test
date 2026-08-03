@@ -3,6 +3,7 @@ from __future__ import annotations
 from traffic_monitor.models import Alert
 from traffic_monitor.sources.asfinag import fetch_asfinag
 from traffic_monitor.sources.autobahn import fetch_autobahn
+from traffic_monitor.sources.facebook_gpmaljevac import fetch_facebook_gpmaljevac
 from traffic_monitor.sources.gpmaljevac import fetch_gpmaljevac
 from traffic_monitor.sources.hak_cameras import fetch_hak_cameras
 from traffic_monitor.sources.nakordoni import fetch_nakordoni
@@ -16,6 +17,7 @@ def fetch_all(config: dict) -> list[Alert]:
         fetch_asfinag,
         fetch_promet,
         fetch_gpmaljevac,
+        fetch_facebook_gpmaljevac,
         fetch_nakordoni,
         fetch_hak_cameras,
     )
