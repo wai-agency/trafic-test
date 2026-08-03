@@ -32,8 +32,23 @@ def test_karawanken_suggests_graz():
             location="Karawanken",
         )
     ]
-    routes = choose_reroutes(detect_blockers(alerts))
+    blockers = detect_blockers(alerts)
+    assert blockers == {"karawanken"}
+    routes = choose_reroutes(blockers)
     assert any(r.id == "via_graz" for r in routes)
+
+
+def test_gpmaljevac_source_does_not_fake_maljevac_blocker():
+    alerts = [
+        Alert(
+            source="GPMaljevac",
+            severity="critical",
+            title="Velike guzve na autocestama u Sloveniji",
+            detail="Primorska",
+            location="Slowenien",
+        )
+    ]
+    assert "maljevac" not in detect_blockers(alerts)
 
 
 def test_both_suggest_graz_izacic():

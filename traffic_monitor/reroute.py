@@ -70,7 +70,8 @@ ROUTES: dict[str, RouteOption] = {
 
 
 def _alert_text(alert: Alert) -> str:
-    return f"{alert.title} {alert.detail} {alert.location} {alert.source}".lower()
+    # Do not include source name: "GPMaljevac" would false-positive on "maljevac"
+    return f"{alert.title} {alert.detail} {alert.location}".lower()
 
 
 def detect_blockers(alerts: list[Alert]) -> set[str]:
@@ -82,20 +83,33 @@ def detect_blockers(alerts: list[Alert]) -> set[str]:
         if alert.title == "Quelle nicht erreichbar":
             continue
         text = _alert_text(alert)
+        source = alert.source.lower()
         # Border waits from Nakordoni are especially actionable
-        heavy_border = alert.source.lower() == "nakordoni" and (alert.delay_min or 0) >= 45
+        heavy_border = source == "nakordoni" and (alert.delay_min or 0) >= 45
         critical = alert.severity == "critical" or heavy_border
 
         if any(k in text for k in ("karawan", "karavan", "a11")) and critical:
             blockers.add("karawanken")
-        if any(k in text for k in ("tauern", "katschberg", "a10")) and critical:
+        if any(k in text for k in ("tauern", "katschberg")) and critical:
             blockers.add("tauern")
-        if "maljevac" in text and (critical or heavy_border):
+        # Require clear border mention (avoid matching inside other words)
+        if ("maljevac" in text or "velika kladu" in text) and (critical or heavy_border):
             blockers.add("maljevac")
-        if any(k in text for k in ("izači", "izaci", "petrovo selo", "petrowo selo", "ličko", "licko", "litscho")):
+        if any(
+            k in text
+            for k in (
+                "izači",
+                "izaci",
+                "petrovo selo",
+                "petrowo selo",
+                "ličko petrovo",
+                "licko petrovo",
+                "litscho petrowo",
+            )
+        ):
             if critical or heavy_border:
                 blockers.add("izacic")
-        if alert.source == "autobahn.de" and alert.severity == "critical":
+        if source == "autobahn.de" and alert.severity == "critical":
             blockers.add("a8")
     return blockers
 
