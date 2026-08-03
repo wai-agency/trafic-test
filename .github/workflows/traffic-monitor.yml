@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
   actions: write
@@ -64,10 +64,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "::error::TELEGRAM_BOT_TOKEN oder TELEGRAM_CHAT_ID fehlt."
-            echo "Settings → Secrets and variables → Actions → New repository secret"
-            echo "  TELEGRAM_BOT_TOKEN"
-            echo "  TELEGRAM_CHAT_ID=5024687751"
+            echo "::error::TELEGRAM_BOT_TOKEN oder TELEGRAM_CHAT_ID fehlt in Secrets."
+            echo "→ https://github.com/wai-agency/trafic-test/settings/secrets/actions"
             traffic-monitor check --min-severity "$MIN_SEVERITY" --console-only --state .traffic_alert_state.json
             exit 1
           fi
@@ -100,52 +98,11 @@ jobs:
           path: site
           retention-days: 7
 
-  pages:
-    needs: monitor
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # Does not fail the whole workflow if Pages can't be enabled (private repos often need Pro or public).
-    continue-on-error: true
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Deploy dashboard to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          python-version: "3.12"
-
-      - name: Install and build dashboard
-        run: |
-          pip install -e .
-          traffic-monitor dashboard --out site
-
-      - name: Setup Pages
-        id: setup_pages
-        continue-on-error: true
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Upload Pages artifact
-        if: steps.setup_pages.outcome == 'success'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        if: steps.setup_pages.outcome == 'success'
-        uses: actions/deploy-pages@v4
-
-      - name: Pages hint
-        if: steps.setup_pages.outcome != 'success'
-        run: |
-          echo "::warning::GitHub Pages konnte nicht deployed werden."
-          echo "Repo ist privat: entweder öffentlich machen ODER GitHub Pro,"
-          echo "dann Settings → Pages → Source = GitHub Actions."
-          echo "Dashboard-ZIP findest du im Job 'monitor' unter Artifacts."
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
