@@ -29,7 +29,7 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 7
+_PROMPT_VERSION = 8
 
 _PROMPT = (
     "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
@@ -434,10 +434,21 @@ def normalize_verdict(text: str | dict) -> dict | None:
         end_visible = False
     else:
         end_visible = bool(raw_end)
+
+    cars = out.get("vehicles") or 0
+    road = (out.get("road") or "").lower()
+    # Dense bumper-to-bumper queues often look "finished" at distant booths
+    # while more cars are still in line — treat as end not reliably visible.
+    if end_visible and cars >= 7 and road in ("stockend", "dicht"):
+        end_visible = False
+        summary = out.get("summary") or ""
+        note = "Dichte Kolonne — Ende unsicher, Worst Case."
+        if "worst" not in summary.lower() and "unsicher" not in summary.lower():
+            out["summary"] = f"{summary} {note}".strip() if summary else note
+
     out["queue_end_visible"] = end_visible
 
     # Worst case when queue end is cut off / unclear
-    cars = out.get("vehicles") or 0
     if not end_visible and cars > 0:
         out["severity"] = "critical"
         out["road"] = "dicht"
