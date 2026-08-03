@@ -59,6 +59,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NAKORDONI_API_KEY: ${{ secrets.NAKORDONI_API_KEY }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
           MIN_SEVERITY: ${{ github.event.inputs.min_severity || 'warning' }}
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
         run: |

@@ -87,12 +87,17 @@ Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ei
 
 Dashboard: **https://wai-agency.github.io/trafic-test/**
 
-### Alternativrouten per Telegram
-Bei kritischem Stau (z. B. Karawanken oder lange Wartezeit Maljevac) schickt der Monitor
-automatisch eine **🧭 Alternative** mit **Google-Maps-Link**:
-- Karawanken/Tauern problematisch → Route über **Graz/Maribor**
-- Maljevac lange Schlange → Grenze **Izačić**
-- beides → Graz/Maribor + Izačić
+### Live-Alternativrouten per Telegram
+Bei Stau berechnet der Monitor **im Moment** mehrere Kandidaten und schickt die **aktuell schnellste**
+mit Google-Maps-Link:
+
+1. Fahrzeit live (wenn Key vorhanden):
+   - `GOOGLE_MAPS_API_KEY` (Google Routes/Directions mit Verkehr) **oder**
+   - `TOMTOM_API_KEY` (TomTom traffic)
+2. Sonst: OSRM-Fahrzeit **plus Live-Grenzwartezeit** von Nakordoni
+3. Vergleich z. B. Karawanken+Maljevac vs Graz/Maribor vs Izačić → beste Option + Vergleichstabelle
+
+Secrets: https://github.com/wai-agency/trafic-test/settings/secrets/actions
 
 ### Dashboard lokal
 

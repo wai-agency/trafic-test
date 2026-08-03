@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from traffic_monitor.config import load_config
+from traffic_monitor.live_routing import build_live_reroute_alerts
 from traffic_monitor.models import Alert
 from traffic_monitor.notifiers import AlertState, Notifier, build_notifiers
 from traffic_monitor.reroute import build_reroute_alerts
@@ -26,7 +27,10 @@ def run_once(
 ) -> list[Alert]:
     config = load_config(config_path)
     alerts = fetch_all(config)
-    reroutes = build_reroute_alerts(alerts)
+    # Prefer live scored routes (OSRM/Google/TomTom + Grenzwartezeiten)
+    reroutes = build_live_reroute_alerts(alerts)
+    if not reroutes:
+        reroutes = build_reroute_alerts(alerts)
     all_alerts = alerts + reroutes
     rank = {"info": 0, "warning": 1, "critical": 2}
     min_rank = rank.get(min_severity, 1)
