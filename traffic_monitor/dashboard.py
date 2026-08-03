@@ -177,13 +177,13 @@ def _perfect_section(perfect: dict | None) -> str:
 
     timeline_html = "".join(
         f"""
-        <li class="tl-item load-{html.escape(t.get('load', 'ok'))}{' best' if t.get('is_best') else ''}">
+        <li class="tl-item load-{html.escape(t.get('load', 'ok'))}{' best' if t.get('is_best') else ''}{' night' if t.get('night') else ''}">
           <span class="tl-depart">{html.escape(t.get('depart_day', ''))} {html.escape(t['depart_short'])}</span>
           <span class="tl-bar" aria-hidden="true"></span>
           <span class="tl-meta">Grenze ~{t['border_wait_min']}m · Bužim {html.escape(t['arrive_buzim_short'])}</span>
         </li>
         """
-        for t in timeline[:14]
+        for t in timeline[:28]
     )
 
     top_html = "".join(
@@ -272,6 +272,10 @@ def _perfect_section(perfect: dict | None) -> str:
 
       <div class="perfect-timeline-wrap">
         <h3>Abfahrtsfenster (Hauptroute)</h3>
+        <p class="empty" style="margin:0 0 10px">
+          Inkl. Nacht 00–05 · Update alle ~{html.escape(str(perfect.get('refresh_minutes') or 30))} Min
+          · {len(timeline)} Slots
+        </p>
         <ol class="timeline">{timeline_html or '<li class="empty">Keine Slots</li>'}</ol>
       </div>
 
@@ -671,6 +675,14 @@ def render_html(payload: dict) -> str:
       border-color: var(--accent-2);
       box-shadow: 0 0 0 2px rgba(31,107,87,0.18);
       background: #e8f3ee;
+    }}
+    .tl-item.night {{
+      background: #eef2f6;
+      border-color: #c5d0da;
+    }}
+    .tl-item.night.best {{
+      background: #e8f3ee;
+      border-color: var(--accent-2);
     }}
     .tl-depart {{ display: block; font-weight: 800; font-size: 0.92rem; }}
     .tl-bar {{

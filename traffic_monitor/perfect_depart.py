@@ -153,29 +153,50 @@ def candidate_routes() -> list[RouteOption]:
 
 
 def departure_slots(now: datetime) -> list[datetime]:
-    """Dense sampling for the next ~30h (afternoon/evening + overnight)."""
+    """Sample upcoming departures for ~36h, with night slots 00–05 always included.
+
+    Density (API-friendly):
+    - 13:00–23:00 → every 30 min
+    - 00:00–05:00 → every hour (00, 01, 02, 03, 04, 05)
+    - other daytime hours → every hour
+    """
     slots: list[datetime] = []
-    cursor = now.replace(second=0, microsecond=0) + timedelta(minutes=30)
-    # snap to :00 or :30
-    if cursor.minute < 30:
+    # next half-hour boundary at least 20 min out
+    cursor = now.replace(second=0, microsecond=0) + timedelta(minutes=20)
+    if cursor.minute == 0:
+        pass
+    elif cursor.minute <= 30:
         cursor = cursor.replace(minute=30)
     else:
         cursor = (cursor + timedelta(hours=1)).replace(minute=0)
-    end = now + timedelta(hours=30)
+
+    end = now + timedelta(hours=36)
     t = cursor
     while t <= end:
         hour = t.hour
-        if 14 <= hour <= 22:
+        if 13 <= hour <= 23:
             slots.append(t)
             t += timedelta(minutes=30)
-        elif hour >= 23 or hour <= 5:
+        elif hour <= 5:
+            # night window: only :00
             if t.minute == 0:
                 slots.append(t)
-            t += timedelta(hours=1)
-            t = t.replace(minute=0)
-        else:
             t = (t + timedelta(hours=1)).replace(minute=0)
-    return slots
+        else:
+            if t.minute == 0:
+                slots.append(t)
+            t = (t + timedelta(hours=1)).replace(minute=0)
+
+    # Guarantee tonight/tomorrow 00–05 even if sampling edge-cases skip them
+    for day_offset in (0, 1):
+        day = (now + timedelta(days=day_offset)).date()
+        for hour in (0, 1, 2, 3, 4, 5):
+            dt = datetime(day.year, day.month, day.day, hour, 0, tzinfo=TZ)
+            if dt > now + timedelta(minutes=20):
+                slots.append(dt)
+
+    uniq = sorted({s.replace(second=0, microsecond=0) for s in slots})
+    return [s for s in uniq if now + timedelta(minutes=15) < s <= end]
 
 
 def score_slot(
@@ -270,6 +291,8 @@ def compute_perfect_payload() -> dict:
 
     forecast = _load_maljevac_forecast(nk_key)
     routes = candidate_routes()
+    primary_route = next(r for r in routes if r.id == "primary")
+    alt_routes = [r for r in routes if r.id != "primary"]
     slots = departure_slots(now)
 
     live_cam_wait = None
@@ -281,22 +304,44 @@ def compute_perfect_payload() -> dict:
     except Exception:
         live_cam_wait = None
 
+    def _score(dep: datetime, route: RouteOption, *, use_google: bool) -> SlotScore | None:
+        return score_slot(
+            dep,
+            route,
+            forecast,
+            google_key if use_google else None,
+            live_cam_wait_min=live_cam_wait,
+            now=now,
+        )
+
+    # Pass 1: all slots × Hauptroute with Google (timeline + ranking base)
+    # Keeps Directions quota sane vs scoring 4 routes for every slot.
     scored: list[SlotScore] = []
     for dep in slots:
-        for route in routes:
-            s = score_slot(
-                dep,
-                route,
-                forecast,
-                google_key,
-                live_cam_wait_min=live_cam_wait,
-                now=now,
-            )
-            if s:
-                scored.append(s)
+        s = _score(dep, primary_route, use_google=True)
+        if s:
+            scored.append(s)
 
     if not scored:
         raise SystemExit("Keine Scores berechnet")
+
+    scored.sort(key=lambda s: (s.arrive_buzim, s.border_wait_min, s.border_cars, s.drive_sec))
+    # Pass 2: compare alternate routes only on the most promising departures
+    top_deps = []
+    seen: set[str] = set()
+    for s in scored:
+        key = s.depart.isoformat()
+        if key in seen:
+            continue
+        seen.add(key)
+        top_deps.append(s.depart)
+        if len(top_deps) >= 8:
+            break
+    for dep in top_deps:
+        for route in alt_routes:
+            s = _score(dep, route, use_google=True)
+            if s:
+                scored.append(s)
 
     scored.sort(key=lambda s: (s.arrive_buzim, s.border_wait_min, s.border_cars, s.drive_sec))
     best = scored[0]
@@ -309,16 +354,19 @@ def compute_perfect_payload() -> dict:
     timeline = []
     for s in primary:
         load = "frei" if s.border_cars <= 3.0 else ("ok" if s.border_cars <= 5.0 else "voll")
+        night = s.depart.hour <= 5
         timeline.append(
             {
                 "depart_short": s.depart.strftime("%H:%M"),
                 "depart_day": s.depart.strftime("%a"),
                 "depart": s.depart.isoformat(),
                 "arrive_buzim_short": s.arrive_buzim.strftime("%H:%M"),
+                "arrive_border_short": s.arrive_border.strftime("%H:%M"),
                 "border_wait_min": s.border_wait_min,
                 "border_cars": round(s.border_cars, 1),
                 "total_label": s.fmt_dur(),
                 "load": load,
+                "night": night,
                 "is_best": s.depart == best.depart and s.route.id == best.route.id,
             }
         )
@@ -326,20 +374,22 @@ def compute_perfect_payload() -> dict:
     return {
         "generated_at": now.isoformat(),
         "generated_label": now.strftime("%d.%m.%Y %H:%M"),
+        "refresh_minutes": 30,
         "origin": "Waiblingen",
         "destination": "Bužim",
         "provider": best.provider,
+        "slot_count": len(primary),
         "best": _slot_dict(best, badge="früheste Ankunft"),
         "best_low_border": (
             _slot_dict(best_low, badge="freie Grenze")
             if best_low and best_low.depart != best.depart
             else None
         ),
-        "top": [_slot_dict(s) for s in scored[:8]],
+        "top": [_slot_dict(s) for s in scored[:10]],
         "timeline": timeline,
         "hint": (
-            "Google bewertet Straßenstau live/prognostisch; "
-            "Grenze kommt vom Nakordoni-Forecast Maljevac."
+            "Google Live-Stau + Nakordoni Maljevac-Forecast (+ HAK-Cam KI wenn Ankunft nah). "
+            "Abfahrtsfenster inkl. 00–05; Update alle ~30 Min wegen API-Limits."
         ),
     }
 
