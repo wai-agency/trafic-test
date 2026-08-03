@@ -15,9 +15,12 @@ import time
 from pathlib import Path
 
 import httpx
+from rich.console import Console
 
 from traffic_monitor.config import env
 from traffic_monitor.models import Alert
+
+console = Console()
 
 HAK_REFERER = "https://m.hak.hr/"
 DEFAULT_MODEL = "gemini-2.0-flash"
@@ -120,10 +123,19 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                 verdict = _analyze_with_gemini(
                     client, image, api_key, model, name, cam.get("direction", "")
                 )
-            except (httpx.HTTPError, ValueError):
+            except httpx.HTTPError as exc:
+                console.print(f"[yellow]HAK-Cam {cam_id}: HTTP {exc}[/yellow]")
+                continue
+            except ValueError as exc:
+                console.print(f"[yellow]HAK-Cam {cam_id}: {exc}[/yellow]")
                 continue
             if verdict is None:
+                console.print(f"[yellow]HAK-Cam {cam_id}: leere/ungültige KI-Antwort[/yellow]")
                 continue
+            console.print(
+                f"[green]HAK-Cam {cam_id}:[/green] {verdict.get('severity')} · "
+                f"~{verdict.get('wait_min')} min · {verdict.get('summary', '')[:60]}"
+            )
 
             severity = verdict["severity"]
             if severity == "clear":
@@ -215,14 +227,15 @@ def _analyze_with_gemini(
             {
                 "parts": [
                     {"text": prompt},
-                    {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
+                    {"inlineData": {"mimeType": "image/jpeg", "data": b64}},
                 ]
             }
         ],
-        "generationConfig": {"temperature": 0.0, "response_mime_type": "application/json"},
+        "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json"},
     }
     resp = client.post(GEMINI_URL.format(model=model), params={"key": api_key}, json=body)
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        raise ValueError(f"Gemini {resp.status_code}: {resp.text[:240]}")
     return parse_gemini_response(resp.json())
 
 
