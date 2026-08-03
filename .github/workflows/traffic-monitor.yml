@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "*/15 * * * *"
+    # ~alle 20 Min; OpenAI Vision zusätzlich per Cache TTL (~20 Min) gedrosselt
+    - cron: "*/20 * * * *"
   workflow_dispatch:
     inputs:
       min_severity:
@@ -93,30 +94,12 @@ jobs:
           fi
 
           mkdir -p site
-          # Perfect-Optimizer: alle 30 Min (API: Google Directions × viele Slots).
-          # Alerts/Kameras bleiben alle 15 Min. Push / [perfect] immer neu berechnen.
-          MINUTE_UTC=$(date -u +%M)
-          RUN_PERFECT=false
-          if [[ "${{ github.event_name }}" == "push" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            RUN_PERFECT=true
-          elif [[ "$MINUTE_UTC" == "00" || "$MINUTE_UTC" == "30" ]]; then
-            RUN_PERFECT=true
+          # Perfect + Alerts + Kameras: Schedule ~alle 20 Min (Vision zusätzlich Cache ~20 Min).
+          PERFECT_ARGS=(--out site/perfect.json)
+          if [[ "${{ github.event.head_commit.message }}" == *"[perfect]"* ]]; then
+            PERFECT_ARGS+=(--notify)
           fi
-          if [[ "$RUN_PERFECT" == "true" ]]; then
-            PERFECT_ARGS=(--out site/perfect.json)
-            if [[ "${{ github.event.head_commit.message }}" == *"[perfect]"* ]]; then
-              PERFECT_ARGS+=(--notify)
-            fi
-            traffic-monitor perfect "${PERFECT_ARGS[@]}" || echo "::warning::Perfect-Abfahrt konnte nicht berechnet werden"
-          else
-            echo "Perfect übersprungen (nächster Lauf :00/:30 UTC)"
-            if [[ -f site/perfect.json ]]; then
-              echo "Nutze gecachtes site/perfect.json"
-            else
-              echo "::warning::Kein gecachtes perfect.json — berechne jetzt einmalig"
-              traffic-monitor perfect --out site/perfect.json || echo "::warning::Perfect-Abfahrt konnte nicht berechnet werden"
-            fi
-          fi
+          traffic-monitor perfect "${PERFECT_ARGS[@]}" || echo "::warning::Perfect-Abfahrt konnte nicht berechnet werden"
 
           if [ "$FORCE_NOTIFY" = "true" ]; then
             python - <<'PY'

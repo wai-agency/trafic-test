@@ -3,7 +3,7 @@
 The live camera JPEGs live under ``https://m.hak.hr/cam.asp?id=<id>``. They are
 always surfaced in the dashboard (no key needed). When an ``OPENAI_API_KEY`` is
 configured, each analysed camera image is sent to OpenAI vision
-(default ``gpt-4o``) to estimate queue length / wait time and enrich routing.
+(default ``gpt-5.6-luna``) to estimate queue length / wait time and enrich routing.
 """
 
 from __future__ import annotations
@@ -23,14 +23,18 @@ from traffic_monitor.models import Alert
 console = Console()
 
 HAK_REFERER = "https://m.hak.hr/"
-DEFAULT_MODEL = "gpt-4o"
-FALLBACK_MODELS = ("gpt-4o-mini", "gpt-5-nano")
+DEFAULT_MODEL = "gpt-5.6-luna"
+# Fallbacks if Luna refuses / returns empty (keep a classic vision model in the chain)
+FALLBACK_MODELS = ("gpt-4o-mini", "gpt-4o")
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
-# Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 13
+# Bump when vision prompt / post-processing / model cadence changes.
+_PROMPT_VERSION = 14
+
+# Reuse OpenAI vision results ~20 min so scheduled runs do not re-upload JPEGs every cycle.
+_CACHE_TTL_SEC = 20 * 60
 
 _PROMPT = (
     "Du hilfst Autofahrern bei der Reiseplanung (Strecke Waiblingen → Bužim). "
@@ -109,7 +113,6 @@ def snapshot_cameras(config: dict, out_dir: str | Path) -> dict[int | str, str]:
     return mapping
 
 
-_CACHE_TTL_SEC = 12 * 60
 # Overridable in tests
 _CACHE_PATH: Path | None = None
 
@@ -401,13 +404,15 @@ def _analyze_with_openai(
             }
         ],
     }
-    # GPT-5 family rejects non-default temperature; older models accept 0.
+    # GPT-5 / 5.6 family: no custom temperature; use low/none reasoning for counting.
     if not model.startswith("gpt-5"):
         body["temperature"] = 0
     else:
-        # Keep nano cheap/fast for classification-style queue counting
-        body["reasoning_effort"] = "minimal"
-        # Reasoning tokens count toward this limit — keep headroom for JSON
+        # 5.6 supports none|low|…; older gpt-5-nano used "minimal"
+        if model.startswith("gpt-5.6") or model.startswith("gpt-5.5") or model.startswith("gpt-5.4"):
+            body["reasoning_effort"] = "low"
+        else:
+            body["reasoning_effort"] = "minimal"
         body["max_completion_tokens"] = 2000
 
     headers = {

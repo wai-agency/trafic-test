@@ -114,7 +114,7 @@ def _payload_from_alerts(
         primary = to_bih or to_hr
         maljevac_now = {
             "name": "Maljevac",
-            "source": "HAK-Cam · gpt-4o",
+            "source": "HAK-Cam · gpt-5.6-luna",
             "cars": primary.get("cars"),
             "wait_min": primary.get("wait_min"),
             "trucks": primary.get("trucks"),
@@ -1197,7 +1197,7 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Auto-Refresh alle 15 Min · Perfect + HAK-Kameras + optional OpenAI Vision</footer>
+    <footer>BuzimLine · Auto-Refresh alle 20 Min · Perfect + HAK-Kameras + OpenAI Vision (Luna)</footer>
   </main>
   <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
     <div class="lightbox-inner">
@@ -1208,7 +1208,7 @@ def render_html(payload: dict) -> str:
   </div>
   <script type="application/json" id="payload">{payload_json}</script>
   <script>
-    const mins = 15;
+    const mins = 20;
     setTimeout(() => location.reload(), mins * 60 * 1000);
     // Soft live refresh of HAK camera stills
     setInterval(() => {{
@@ -1389,7 +1389,7 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
         return """
     <section class="border-now" aria-labelledby="border-title">
       <h2 id="border-title">Maljevac jetzt (HAK-Kamera)</h2>
-      <p class="empty">Noch keine KI-Zählung. Nächster Monitor-Lauf wertet Cam 430 (→BiH) und 429 (→HR) per gpt-4o aus.</p>
+      <p class="empty">Noch keine KI-Zählung. Nächster Monitor-Lauf wertet Cam 430 (→BiH) und 429 (→HR) per gpt-5.6-luna aus (~alle 20 Min).</p>
     </section>
     """
 

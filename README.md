@@ -75,7 +75,7 @@ docker compose up -d --build
 
 ### In der Cloud ohne PC (GitHub Actions + mobiles Dashboard)
 
-Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages.
+Der Workflow prüft **alle 20 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages. OpenAI Vision (gpt-5.6-luna) wertet die HAK-Kameras aus und cached die Zählung ~20 Min.
 
 1. Secrets (erledigt, wenn gesetzt):  
    https://github.com/wai-agency/trafic-test/settings/secrets/actions  
@@ -83,7 +83,7 @@ Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ei
    - `TELEGRAM_CHAT_ID` = `5024687751`
 2. Pages Source: **GitHub Actions**  
    https://github.com/wai-agency/trafic-test/settings/pages
-3. Workflow läuft bei Push auf `main`, alle 15 Min, oder manuell
+3. Workflow läuft bei Push auf `main`, alle 20 Min, oder manuell
 
 Dashboard: **https://wai-agency.github.io/trafic-test/**
 
