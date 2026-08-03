@@ -11,6 +11,12 @@ from traffic_monitor.models import Alert
 
 console = Console()
 
+DEFAULT_DASHBOARD_URL = "https://wai-agency.github.io/trafic-test/"
+
+
+def dashboard_url() -> str:
+    return (env("DASHBOARD_URL") or DEFAULT_DASHBOARD_URL).rstrip("/") + "/"
+
 
 class Notifier:
     def send(self, alert: Alert) -> None:
@@ -35,11 +41,15 @@ class TelegramNotifier(Notifier):
 
     def send(self, alert: Alert) -> None:
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+        text = alert.to_message()
+        dash = dashboard_url()
+        if dash.rstrip("/") not in text:
+            text = f"{text}\n\nDashboard: {dash}"
         # Preview an for Maps-Links, sonst aus
         preview = "google.com/maps" in (alert.url or "") or "google.com/maps" in alert.detail
         payload = {
             "chat_id": self.chat_id,
-            "text": alert.to_message(),
+            "text": text,
             "disable_web_page_preview": not preview,
         }
         with httpx.Client(timeout=20.0) as client:
