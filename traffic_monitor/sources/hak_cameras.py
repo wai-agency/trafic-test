@@ -2,8 +2,8 @@
 
 The live camera JPEGs live under ``https://m.hak.hr/cam.asp?id=<id>``. They are
 always surfaced in the dashboard (no key needed). When an ``OPENAI_API_KEY`` is
-configured, each analysed camera image is sent to a cheap OpenAI vision model
-(default ``gpt-4o-mini``) to estimate queue length / wait time and enrich routing.
+configured, each analysed camera image is sent to OpenAI vision
+(default ``gpt-4o``) to estimate queue length / wait time and enrich routing.
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from traffic_monitor.models import Alert
 console = Console()
 
 HAK_REFERER = "https://m.hak.hr/"
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gpt-4o"
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 6
+_PROMPT_VERSION = 7
 
 _PROMPT = (
     "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
@@ -45,16 +45,19 @@ _PROMPT = (
     "• LKW: Feld trucks, nicht in vehicles.\n"
     "• Zaehle in der aktiven Spur auch kleine/unscharfe Autos hinten — aber nur in "
     "dieser Spur.\n\n"
-    "Kolonnenende (sehr wichtig):\n"
-    "• queue_end_visible=true nur wenn du klar das letzte Auto ODER Kabine/Schranke "
-    "als Ende der Warteschlange siehst.\n"
-    "• queue_end_visible=false wenn die Spur am Bildrand/Huegel abgeschnitten ist, "
-    "Autos immer noch dichter werden, oder du unsicher bist ob noch mehr kommt.\n"
+    "Kolonnenende (KRITISCH — im Zweifel false):\n"
+    "• queue_end_visible=true NUR wenn du EINDEUTIG das letzte wartende Auto siehst "
+    "UND dahinter freie Spur / klarer Abstand bis zur Kabine (keine durchgehende "
+    "dichte Kolonne mehr).\n"
+    "• Sichtbare Grenzkabinen/Daecher allein reichen NICHT fuer true. Wenn die Spur "
+    "bis in die Ferne dicht besetzt wirkt, Autos winzig/unscharf werden, oder du "
+    "nicht sicher bist ob noch mehr kommt → queue_end_visible=false.\n"
+    "• Wenn unsicher → IMMER false (Worst Case).\n"
     "• Wenn queue_end_visible=false → IMMER vom SCHLIMMSTEN ausgehen: "
     "severity=critical, road=dicht, wait_min hoch (mindestens 45–60+), "
     "vehicles = sichtbare Spur + deutliche Aufschlagschaetzung (oft mind. 2x der "
-    "sichtbaren Autos, aber Parkplaetze weiterhin NICHT mitzaehlen). "
-    "Summary muss sagen: Ende nicht sichtbar, langer Stau angenommen.\n\n"
+    "sichtbaren Autos, Parkplaetze weiterhin NICHT). "
+    "Summary: Ende nicht sichtbar, langer Stau angenommen.\n\n"
     "Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
     "{"
     "\"vehicles\": <int nur aktive Einfahrtspur (ggf. Worst-Case-Schaetzung)>, "
@@ -67,9 +70,9 @@ _PROMPT = (
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
     "\"summary\": \"<kurz deutsch>\" "
     "}.\n"
-    "Wenn Ende sichtbar: unter 5 = clear; 5-20 = warning; ueber 20 = critical; "
-    "Wartezeit ~2–3 min pro Auto in der Spur. "
-    "Wenn Ende NICHT sichtbar: immer critical / langer Stau (Worst Case)."
+    "Wenn Ende klar sichtbar: unter 5 = clear; 5-20 = warning; ueber 20 = critical; "
+    "Wartezeit ~2–3 min pro Auto. "
+    "Wenn Ende NICHT sichtbar oder unsicher: immer critical / langer Stau."
 )
 
 
@@ -423,11 +426,14 @@ def normalize_verdict(text: str | dict) -> dict | None:
         except (TypeError, ValueError):
             out[key] = None
 
-    raw_end = verdict.get("queue_end_visible", True)
+    # Default false: missing/ambiguous end → worst case (do not assume "frei")
+    raw_end = verdict.get("queue_end_visible", False)
     if isinstance(raw_end, str):
         end_visible = raw_end.strip().lower() in ("true", "1", "yes", "ja", "sichtbar")
+    elif raw_end is None:
+        end_visible = False
     else:
-        end_visible = bool(raw_end) if raw_end is not None else True
+        end_visible = bool(raw_end)
     out["queue_end_visible"] = end_visible
 
     # Worst case when queue end is cut off / unclear

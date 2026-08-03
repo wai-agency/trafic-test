@@ -81,8 +81,8 @@ nakordoni:
 # AI queue analysis (OpenAI vision) runs only when OPENAI_API_KEY is set.
 hak_cameras:
   page: "https://m.hak.hr/kamera.asp?g=2&k=177"
-  # Cheap OpenAI vision model. Override via OPENAI_VISION_MODEL env if needed.
-  model: gpt-4o-mini
+  # OpenAI vision model for queue counting. Override via OPENAI_VISION_MODEL env.
+  model: gpt-4o
   # Only alert from AI verdicts at/above this severity.
   analyze_min_severity: warning
   cams:
