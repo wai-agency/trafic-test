@@ -29,44 +29,39 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 4
+_PROMPT_VERSION = 5
 
 _PROMPT = (
-    "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien). "
+    "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
     "Analysiere NUR die angegebene Fahrtrichtung.\n\n"
-    "Was zaehlen (streng):\n"
-    "1) Nur Fahrzeuge in der AKTIVEN Warteschlange der genannten Richtung "
-    "(Fahrspur Richtung Grenze / Markierung BiH bzw. HR auf dem Bild).\n"
-    "2) Zaehle sichtbare Autos in dieser Spur sorgfaeltig — auch kleine/unscharfe "
-    "hinten in derselben Spur. Ein Auto = 1.\n"
-    "3) NICHT zaehlen: parkende Autos auf Parkplaetzen/am Rand, Gegenrichtung, "
-    "LKW nur als trucks (nicht doppelt in vehicles), Schatten, Gebaeude, "
-    "Fahrzeuge unter dem Dach der Grenzanlage wenn sie nicht klar in der Schlange sind.\n"
-    "4) queue_end_visible=true wenn das Ende der Schlange ODER die Grenzkabine/"
-    "Schranke sichtbar ist und die Spur davor nicht ueber den Bildrand hinaus "
-    "weiter dicht besetzt wirkt. Bei diesem Bildtyp (Kabinen/Dach im Hintergrund "
-    "sichtbar) ist das Ende meist sichtbar → true.\n"
-    "5) queue_end_visible=false NUR wenn die Kolonne klar am Bildrand/Huegel "
-    "abgeschnitten ist und dahinter noch Schlange vermutet werden muss. Dann "
-    "darfst du vehicles leicht erhoehen (sichtbar + vorsichtige Schaetzung), "
-    "aber NICHT verdoppeln oder wild aufblasen. Typisch +20–40%, nicht +100%.\n"
-    "6) vehicles = realistische Anzahl wartender PKW/Transporter in der aktiven "
-    "Schlange (nicht 'alle Autos irgendwo im Bild').\n\n"
+    "HARTE REGEL — nur Einfahrt-/Wartespur:\n"
+    "• vehicles = NUR PKW/Transporter in der einen aktiven Spur Richtung Grenze "
+    "(Pfeil/Markierung BiH oder HR, mittlere Fahrbahn mit Kolonne).\n"
+    "• NIEMALS mitzaehlen: schraege/seitliche Parkplaetze, abgestellte Autos hinter "
+    "Pollern/Absperrung, Parkbuchten rechts/links, Gegenrichtung, ruhender Verkehr "
+    "neben der Spur, Schatten, Gebaeude.\n"
+    "• Beispiel Maljevac: die Reihe diagonal geparkter Autos am Rand ist KEIN Stau "
+    "und gehoert NICHT in vehicles.\n"
+    "• LKW: Feld trucks, nicht in vehicles.\n"
+    "• Zaehle in der aktiven Spur auch kleine/unscharfe Autos hinten — aber nur in "
+    "dieser Spur.\n"
+    "• queue_end_visible=true wenn Grenzkabine/Schranke oder letztes Auto der Spur "
+    "sichtbar ist. false nur wenn die Spur klar am Bildrand abgeschnitten ist.\n"
+    "• Bei false: vehicles nur leicht erhoehen (+20–40%), nicht verdoppeln.\n\n"
     "Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
     "{"
-    "\"vehicles\": <int wartende PKW/Transporter in der aktiven Schlange>, "
-    "\"trucks\": <int LKW in/neben der Schlange>, "
-    "\"wait_min\": <int geschaetzte Wartezeit Minuten>, "
+    "\"vehicles\": <int nur aktive Einfahrtspur>, "
+    "\"trucks\": <int LKW in/neben der Spur>, "
+    "\"wait_min\": <int Minuten>, "
     "\"queue_end_visible\": <true|false>, "
+    "\"parked_ignored\": <int geschaetzte parkende Autos die du bewusst NICHT gezaehlt hast>, "
     "\"severity\": \"clear\"|\"warning\"|\"critical\", "
     "\"weather\": \"sunny|cloudy|rain|fog|night|unknown\", "
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
-    "\"summary\": \"<kurze deutsche Lagebeschreibung>\" "
+    "\"summary\": \"<kurz deutsch; erwaehne dass Parkplaetze nicht gezaehlt wurden wenn relevant>\" "
     "}.\n"
-    "Richtwerte: unter 5 und Ende sichtbar = clear; "
-    "5-20 = warning; ueber 20 oder Ende nicht sichtbar mit langer Schlange = critical. "
-    "Wartezeit grob: ~1.5–2.5 min pro Auto in der aktiven Schlange. "
-    "Wenn queue_end_visible=false: wait_min etwas hoeher, aber vehicles bleibt nah am sichtbaren Stand."
+    "Richtwerte: unter 5 + Ende sichtbar = clear; 5-20 = warning; ueber 20 = critical. "
+    "Wartezeit ~1.5–2.5 min pro Auto in der aktiven Spur."
 )
 
 
@@ -262,6 +257,8 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                 detail_bits.append(f"LKW ~{verdict['trucks']}")
             if wait is not None:
                 detail_bits.append(f"Wartezeit ~{wait} min")
+            if verdict.get("parked_ignored"):
+                detail_bits.append(f"Parkplatz ignoriert ~{verdict['parked_ignored']}")
             if verdict.get("queue_end_visible") is False:
                 detail_bits.append("Kolonnenende nicht sichtbar")
             if verdict.get("weather"):
@@ -291,6 +288,7 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                         "weather": verdict.get("weather"),
                         "road": verdict.get("road"),
                         "queue_end_visible": verdict.get("queue_end_visible"),
+                        "parked_ignored": verdict.get("parked_ignored"),
                         "relevant": bool(cam.get("relevant", False)),
                     },
                 )
@@ -410,7 +408,7 @@ def normalize_verdict(text: str | dict) -> dict | None:
         "weather": str(verdict.get("weather") or "unknown").lower(),
         "road": str(verdict.get("road") or "unbekannt"),
     }
-    for key in ("vehicles", "wait_min", "trucks"):
+    for key in ("vehicles", "wait_min", "trucks", "parked_ignored"):
         value = verdict.get(key)
         try:
             out[key] = int(value) if value is not None else None

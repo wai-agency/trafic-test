@@ -93,12 +93,20 @@ def test_queue_end_visible_keeps_modest_count():
             "road": "stockend",
             "summary": "Mittlere Schlange bis zur Kabine",
             "queue_end_visible": True,
+            "parked_ignored": 7,
         }
     )
     assert v["queue_end_visible"] is True
     assert v["severity"] == "warning"
     assert v["vehicles"] == 12
     assert v["wait_min"] == 20
+    assert v["parked_ignored"] == 7
+
+
+def test_prompt_forbids_parking_lot_count():
+    assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
+    assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Einfahrtspur" in hc._PROMPT
+    assert hc._PROMPT_VERSION >= 5
 
 
 def test_parse_openai_fenced_json():
