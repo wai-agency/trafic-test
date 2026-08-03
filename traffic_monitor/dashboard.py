@@ -73,6 +73,7 @@ def _payload_from_alerts(
                 "verdict": verdict.detail if verdict else None,
                 "wait_min": verdict.delay_min if verdict else None,
                 "vehicles": extras.get("vehicles"),
+                "vehicles_visible": extras.get("vehicles_visible"),
                 "trucks": extras.get("trucks"),
                 "weather": extras.get("weather"),
                 "road": extras.get("road"),
@@ -1476,7 +1477,12 @@ def _camera_card(cam: dict) -> str:
         meta_bits.append(direction)
     if cam.get("wait_min") is not None:
         meta_bits.append(f"KI-Wartezeit ~{cam['wait_min']} min")
-    if cam.get("vehicles") is not None:
+    if cam.get("vehicles_visible") is not None and cam.get("vehicles") is not None:
+        if cam["vehicles_visible"] != cam["vehicles"]:
+            meta_bits.append(f"sichtbar ~{cam['vehicles_visible']} · ~{cam['vehicles']} Autos")
+        else:
+            meta_bits.append(f"~{cam['vehicles']} Autos")
+    elif cam.get("vehicles") is not None:
         meta_bits.append(f"~{cam['vehicles']} Autos")
     if cam.get("trucks") is not None:
         meta_bits.append(f"~{cam['trucks']} LKW")

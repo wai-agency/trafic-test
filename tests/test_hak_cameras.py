@@ -63,9 +63,10 @@ def test_queue_end_not_visible_raises_floor():
     assert v["queue_end_visible"] is False
     assert v["severity"] == "critical"
     assert v["road"] == "dicht"
-    assert v["vehicles"] >= 16  # at least ~2x visible (worst case)
-    assert v["wait_min"] >= 60
-    assert "ende" in v["summary"].lower() or "worst" in v["summary"].lower() or "stau" in v["summary"].lower()
+    assert v["vehicles"] >= 11
+    assert v["vehicles"] <= 16
+    assert v["wait_min"] >= 22
+    assert "ende" in v["summary"].lower() or "aufschlag" in v["summary"].lower() or "stau" in v["summary"].lower()
 
 
 def test_queue_end_not_visible_many_cars_critical():
@@ -80,8 +81,10 @@ def test_queue_end_not_visible_many_cars_critical():
         }
     )
     assert v["severity"] == "critical"
-    assert v["vehicles"] >= 43  # 28*2 or 28+15
-    assert v["wait_min"] >= 60
+    # Soft uplift (~1.5× / +5), not the old 2× / +15 fantasy
+    assert v["vehicles"] >= 33
+    assert v["vehicles"] <= 45
+    assert v["wait_min"] >= 45
 
 
 def test_missing_queue_end_defaults_to_worst_case():
@@ -97,8 +100,9 @@ def test_missing_queue_end_defaults_to_worst_case():
     )
     assert v["queue_end_visible"] is False
     assert v["severity"] == "critical"
-    assert v["wait_min"] >= 60
-    assert v["vehicles"] >= 20
+    assert v["wait_min"] >= 30
+    assert v["vehicles"] >= 13
+    assert v["vehicles"] <= 20
 
 
 def test_queue_end_visible_keeps_modest_count():
@@ -133,15 +137,51 @@ def test_dense_queue_overrides_claimed_visible_end():
     )
     assert v["queue_end_visible"] is False
     assert v["severity"] == "critical"
-    assert v["vehicles"] >= 20
-    assert v["wait_min"] >= 60
+    assert v["vehicles"] >= 13
+    assert v["vehicles"] <= 20
+    assert v["wait_min"] >= 30
+
+
+def test_light_hr_lane_not_inflated_to_fantasy_stau():
+    """Cam 429-style: few cars toward camera must not become ~24 via +15 heuristic."""
+    v = hc.normalize_verdict(
+        {
+            "vehicles_visible": 2,
+            "vehicles": 9,
+            "wait_min": 18,
+            "severity": "critical",
+            "road": "dicht",
+            "summary": "Kolonne unsicher",
+            "queue_end_visible": False,
+            "parked_ignored": 3,
+        }
+    )
+    assert v["vehicles_visible"] == 2
+    assert v["vehicles"] <= 6
+    assert v["wait_min"] < 60
+
+
+def test_short_ambiguous_queue_treated_as_visible_end():
+    v = hc.normalize_verdict(
+        {
+            "vehicles": 2,
+            "wait_min": 5,
+            "severity": "warning",
+            "road": "flüssig",
+            "summary": "Zwei Autos Richtung Kamera",
+            "queue_end_visible": False,
+        }
+    )
+    assert v["queue_end_visible"] is True
+    assert v["vehicles"] == 2
+    assert v["severity"] in {"clear", "warning", "info"}
 
 
 def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Einfahrtspur" in hc._PROMPT
-    assert "SCHLIMMSTEN" in hc._PROMPT or "Worst" in hc._PROMPT or "schlimmsten" in hc._PROMPT.lower()
-    assert hc._PROMPT_VERSION >= 9
+    assert "Cam 429" in hc._PROMPT and "Cam 430" in hc._PROMPT
+    assert hc._PROMPT_VERSION >= 10
     assert hc.DEFAULT_MODEL == "gpt-5-nano"
 
 
