@@ -181,7 +181,7 @@ def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Kolonne" in hc._PROMPT
     assert "einzeln" in hc._PROMPT.lower() or "Auto fuer Auto" in hc._PROMPT
-    assert hc._PROMPT_VERSION >= 11
+    assert hc._PROMPT_VERSION >= 12
     assert hc.DEFAULT_MODEL == "gpt-4o"
 
 

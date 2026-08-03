@@ -29,7 +29,7 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 11
+_PROMPT_VERSION = 12
 
 _PROMPT = (
     "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
@@ -207,30 +207,32 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
     model = env("OPENAI_VISION_MODEL", hak.get("model") or DEFAULT_MODEL) or DEFAULT_MODEL
     page = str(hak.get("page") or HAK_REFERER)
 
+    to_analyze = []
+    for cam in cams:
+        analyze = cam.get("analyze")
+        if analyze is None:
+            analyze = bool(cam.get("relevant", False))
+        if analyze and cam.get("id") is not None:
+            to_analyze.append(cam)
+
     alerts: list[Alert] = []
     with httpx.Client(timeout=60.0, headers={"User-Agent": "stuttgart-buzim-traffic/1.0"}) as client:
-        for cam in cams:
-            # Default: only analyse explicitly marked cams (relevant or analyze=true)
-            analyze = cam.get("analyze")
-            if analyze is None:
-                analyze = bool(cam.get("relevant", False))
-            if not analyze:
-                continue
+        for cam in to_analyze:
             cam_id = cam.get("id")
-            if cam_id is None:
-                continue
             name = str(cam.get("name") or f"HAK Kamera {cam_id}")
+            direction = cam.get("direction", "")
+            hint = str(cam.get("count_hint") or "")
             try:
                 image = _download_image(client, cam_id)
                 verdict = _analyze_with_openai(
-                    client,
-                    image,
-                    api_key,
-                    model,
-                    name,
-                    cam.get("direction", ""),
-                    count_hint=str(cam.get("count_hint") or ""),
+                    client, image, api_key, model, name, direction, count_hint=hint
                 )
+                if verdict is None:
+                    time.sleep(2)
+                    console.print(f"[dim]HAK-Cam {cam_id}: Retry nach leerer Antwort…[/dim]")
+                    verdict = _analyze_with_openai(
+                        client, image, api_key, model, name, direction, count_hint=hint
+                    )
             except httpx.HTTPError as exc:
                 console.print(f"[yellow]HAK-Cam {cam_id}: HTTP {exc}[/yellow]")
                 continue
@@ -303,7 +305,13 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                     },
                 )
             )
-    _save_cache(alerts, model)
+    # Only cache complete sets — partial cache hides a failed direction for ~12 min
+    if len(alerts) >= len(to_analyze):
+        _save_cache(alerts, model)
+    elif alerts:
+        console.print(
+            f"[yellow]HAK-Cam: unvollständig ({len(alerts)}/{len(to_analyze)}) — kein Cache[/yellow]"
+        )
     return alerts
 
 
@@ -395,7 +403,22 @@ def _analyze_with_openai(
             resp = client.post(OPENAI_CHAT_URL, headers=headers, json=body)
     if resp.status_code >= 400:
         raise ValueError(f"OpenAI {resp.status_code}: {resp.text[:240]}")
-    return parse_vision_response(resp.json())
+    data = resp.json()
+    verdict = parse_vision_response(data)
+    if verdict is None:
+        # Surface refusals / empty content for logs
+        try:
+            msg = data["choices"][0]["message"]
+            refusal = msg.get("refusal")
+            content = msg.get("content")
+            finish = data["choices"][0].get("finish_reason")
+            console.print(
+                f"[dim]HAK-Cam parse miss finish={finish!r} refusal={str(refusal)[:80]!r} "
+                f"content={str(content)[:120]!r}[/dim]"
+            )
+        except (KeyError, IndexError, TypeError):
+            console.print(f"[dim]HAK-Cam parse miss raw={str(data)[:160]!r}[/dim]")
+    return verdict
 
 
 def parse_vision_response(data: dict) -> dict | None:
@@ -408,6 +431,8 @@ def parse_vision_response(data: dict) -> dict | None:
             text = "".join(
                 part.get("text", "") if isinstance(part, dict) else str(part) for part in text
             )
+        if not text and message.get("refusal"):
+            return None
     except (KeyError, IndexError, TypeError):
         return None
     if not text:
