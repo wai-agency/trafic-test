@@ -65,6 +65,7 @@ def cameras_from_config(config: dict) -> list[dict]:
                 "name": str(cam.get("name") or f"HAK Kamera {cam_id}"),
                 "direction": str(cam.get("direction") or ""),
                 "relevant": bool(cam.get("relevant", False)),
+                "role": str(cam.get("role") or ""),
                 "image_url": camera_image_url(cam_id),
             }
         )
@@ -255,6 +256,7 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                         "page_url": page,
                         "direction": str(cam.get("direction") or ""),
                         "cam_id": cam_id,
+                        "role": str(cam.get("role") or ""),
                         "vehicles": vehicles,
                         "trucks": verdict.get("trucks"),
                         "weather": verdict.get("weather"),

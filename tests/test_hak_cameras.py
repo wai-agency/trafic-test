@@ -10,8 +10,22 @@ CONFIG = {
         "model": "gpt-4o-mini",
         "analyze_min_severity": "warning",
         "cams": [
-            {"id": 430, "name": "Maljevac — Ausreise HR → BiH", "direction": "HR->BiH", "relevant": True},
-            {"id": 429, "name": "Maljevac — Einreise BiH → HR", "direction": "BiH->HR"},
+            {
+                "id": 430,
+                "name": "Maljevac — Ausreise HR → BiH",
+                "direction": "HR->BiH",
+                "relevant": True,
+                "analyze": True,
+                "role": "to_bih",
+            },
+            {
+                "id": 429,
+                "name": "Maljevac — Einreise BiH → HR",
+                "direction": "BiH->HR",
+                "relevant": True,
+                "analyze": True,
+                "role": "to_hr",
+            },
         ],
     }
 }
@@ -93,11 +107,16 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
     monkeypatch.setattr(hc, "_analyze_with_openai", fake_analyze)
 
     alerts = hc.fetch_hak_cameras(CONFIG)
-    assert len(alerts) == 1
-    assert alerts[0].severity == "critical"
-    assert alerts[0].delay_min == 80
-    assert alerts[0].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
-    assert "gpt-4o-mini" in alerts[0].detail
+    assert len(alerts) == 2
+    by_id = {a.extras["cam_id"]: a for a in alerts}
+    assert by_id[430].severity == "critical"
+    assert by_id[430].delay_min == 80
+    assert by_id[430].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
+    assert by_id[430].extras["role"] == "to_bih"
+    assert "gpt-4o-mini" in by_id[430].detail
+    assert by_id[429].severity == "info"  # clear → info
+    assert by_id[429].extras["vehicles"] == 1
+    assert by_id[429].extras["role"] == "to_hr"
 
     calls = {"n": 0}
 
@@ -107,7 +126,7 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
 
     monkeypatch.setattr(hc, "_analyze_with_openai", boom)
     cached = hc.fetch_hak_cameras(CONFIG)
-    assert len(cached) == 1
+    assert len(cached) == 2
     assert calls["n"] == 0
 
 
@@ -139,29 +158,53 @@ def test_cameras_from_config():
     cams = hc.cameras_from_config(CONFIG)
     assert [c["id"] for c in cams] == [430, 429]
     assert cams[0]["relevant"] is True
+    assert cams[0]["role"] == "to_bih"
+    assert cams[1]["role"] == "to_hr"
     assert cams[0]["image_url"].endswith("id=430")
 
 
 def test_dashboard_embeds_cameras():
-    cam_alert = Alert(
+    cam_bih = Alert(
         source="HAK-Cam",
         severity="critical",
         title="Kamera: Maljevac — Ausreise HR → BiH",
         detail="Lange Kolonne | KI: gpt-4o-mini",
         location="Maljevac — Ausreise HR → BiH",
         delay_min=80,
-        extras={"vehicles": 22, "weather": "sunny", "road": "dicht"},
+        extras={"vehicles": 22, "trucks": 2, "weather": "sunny", "road": "dicht", "role": "to_bih"},
     )
-    payload = _payload_from_alerts(CONFIG, [cam_alert])
+    cam_hr = Alert(
+        source="HAK-Cam",
+        severity="warning",
+        title="Kamera: Maljevac — Einreise BiH → HR",
+        detail="Mittlere Kolonne | KI: gpt-4o-mini",
+        location="Maljevac — Einreise BiH → HR",
+        delay_min=25,
+        extras={"vehicles": 7, "trucks": 0, "weather": "sunny", "road": "flüssig", "role": "to_hr"},
+    )
+    payload = _payload_from_alerts(CONFIG, [cam_bih, cam_hr])
     assert [c["id"] for c in payload["cameras"]] == [430, 429]
     relevant = next(c for c in payload["cameras"] if c["id"] == 430)
     assert relevant["severity"] == "critical"
     assert relevant["wait_min"] == 80
     assert relevant["vehicles"] == 22
+    assert relevant["role"] == "to_bih"
+
+    mj = payload["maljevac_now"]
+    assert mj is not None
+    assert mj["source"].startswith("HAK-Cam")
+    assert mj["to_bih"]["cars"] == 22
+    assert mj["to_bih"]["wait_min"] == 80
+    assert mj["to_hr"]["cars"] == 7
+    assert mj["to_hr"]["wait_min"] == 25
+    # Headline primary = direction to BiH
+    assert mj["cars"] == 22
 
     html_out = render_html(payload)
     assert "Grenz-Kameras" in html_out
     assert "https://m.hak.hr/cam.asp?id=430" in html_out
+    assert "Einfahrt BiH (HR → BiH)" in html_out
+    assert "Einfahrt HR (BiH → HR)" in html_out
     assert "data-cam=" in html_out
     assert 'data-cam-open' in html_out
     assert 'id="cam-lightbox"' in html_out

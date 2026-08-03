@@ -80,36 +80,45 @@ def _payload_from_alerts(
             }
         )
 
-    borders = snapshot_borders(config)
-    maljevac_nk = next((b for b in borders if "maljevac" in b["name"].lower()), None)
-    maljevac_cam = next(
-        (c for c in cameras if c.get("relevant") and c.get("vehicles") is not None),
-        None,
-    )
-    # Prefer fresh camera KI when Nakordoni is stale / very old
-    nk_stale = bool(maljevac_nk and (maljevac_nk.get("stale") or (maljevac_nk.get("age_min") or 0) > 30))
-    if maljevac_cam and (nk_stale or not maljevac_nk):
+    borders = snapshot_borders(config)  # secondary reference only
+
+    def _cam_side(role: str, direction_bits: tuple[str, ...]) -> dict | None:
+        for c in cameras:
+            role_ok = (c.get("role") or "") == role
+            blob = f"{c.get('name','')} {c.get('direction','')}".lower()
+            dir_ok = any(b in blob for b in direction_bits)
+            if (role_ok or dir_ok) and "maljevac" in blob:
+                if c.get("vehicles") is None and c.get("wait_min") is None:
+                    continue
+                return {
+                    "name": c.get("name"),
+                    "direction": c.get("direction"),
+                    "cars": c.get("vehicles"),
+                    "wait_min": c.get("wait_min"),
+                    "trucks": c.get("trucks"),
+                    "severity": c.get("severity"),
+                    "note": (c.get("verdict") or "")[:140],
+                    "cam_id": c.get("id"),
+                }
+        return None
+
+    to_bih = _cam_side("to_bih", ("hr->bih", "ausreise", "hr → bih", "hr→bih"))
+    to_hr = _cam_side("to_hr", ("bih->hr", "einreise", "bih → hr", "bih→hr"))
+    maljevac_now = None
+    if to_bih or to_hr:
+        # Headline uses outbound to BiH (your direction), fallback inbound
+        primary = to_bih or to_hr
         maljevac_now = {
             "name": "Maljevac",
-            "cars": maljevac_cam.get("vehicles"),
-            "wait_min": maljevac_cam.get("wait_min"),
-            "source": "HAK-Cam KI",
-            "note": (maljevac_cam.get("verdict") or "")[:120],
+            "source": "HAK-Cam · gpt-4o-mini",
+            "cars": primary.get("cars"),
+            "wait_min": primary.get("wait_min"),
+            "trucks": primary.get("trucks"),
             "stale": False,
-            "trucks": maljevac_cam.get("trucks"),
+            "note": "Live gezählt von HAK-Kameras (OpenAI Vision)",
+            "to_bih": to_bih,
+            "to_hr": to_hr,
         }
-    elif maljevac_nk:
-        maljevac_now = {
-            "name": maljevac_nk["name"],
-            "cars": maljevac_nk.get("cars"),
-            "wait_min": maljevac_nk.get("wait_min"),
-            "source": "Nakordoni",
-            "note": "veraltet" if nk_stale else "Live-Queue",
-            "stale": nk_stale,
-            "trucks": None,
-        }
-    else:
-        maljevac_now = None
 
     return {
         "generated_at": now.isoformat(),
@@ -266,40 +275,40 @@ def _perfect_section(perfect: dict | None) -> str:
         <span class="perfect-stamp">Live · {html.escape(perfect.get('generated_label', ''))}</span>
       </div>
 
-      <div class="perfect-hero">
+      <div class="perfect-hero" id="perfect-hero" data-perfect-root>
         <p class="perfect-kicker">Waiblingen → Bužim · komplette Route</p>
-        <p class="perfect-time">{html.escape(best['depart_short'])}</p>
-        <p class="perfect-day">{html.escape(best['depart_day'])} · {html.escape(best.get('badge') or 'Empfehlung')}</p>
+        <p class="perfect-time" id="perfect-time">{html.escape(best['depart_short'])}</p>
+        <p class="perfect-day" id="perfect-day">{html.escape(best['depart_day'])} · {html.escape(best.get('badge') or 'Empfehlung')}</p>
 
         <ol class="journey" aria-label="Reisezeitlinie">
           <li>
             <span class="j-label">Los</span>
-            <strong>{html.escape(best['depart_short'])}</strong>
+            <strong id="perfect-los">{html.escape(best['depart_short'])}</strong>
             <span class="j-sub">Waiblingen</span>
           </li>
           <li class="j-line" aria-hidden="true"></li>
           <li>
             <span class="j-label">Grenze</span>
-            <strong>{html.escape(best['arrive_border_short'])}</strong>
-            <span class="j-sub">~{best['border_wait_min']} min · {best['border_cars']} Autos</span>
+            <strong id="perfect-border">{html.escape(best['arrive_border_short'])}</strong>
+            <span class="j-sub" id="perfect-border-meta">~{best['border_wait_min']} min · {best['border_cars']} Autos</span>
           </li>
           <li class="j-line" aria-hidden="true"></li>
           <li>
             <span class="j-label">Ziel</span>
-            <strong>{html.escape(best['arrive_buzim_short'])}</strong>
+            <strong id="perfect-arrive">{html.escape(best['arrive_buzim_short'])}</strong>
             <span class="j-sub">Bužim</span>
           </li>
         </ol>
 
         <div class="perfect-stats">
-          <div><span>Gesamt</span><strong>{html.escape(best['total_label'])}</strong></div>
-          <div><span>Distanz</span><strong>~{best['distance_km']} km</strong></div>
-          <div><span>Route</span><strong>{html.escape(best['route_id'])}</strong></div>
+          <div><span>Gesamt</span><strong id="perfect-total">{html.escape(best['total_label'])}</strong></div>
+          <div><span>Distanz</span><strong id="perfect-dist">~{best['distance_km']} km</strong></div>
+          <div><span>Route</span><strong id="perfect-route-id">{html.escape(best['route_id'])}</strong></div>
         </div>
 
         <p class="perfect-route">{journey}</p>
-        <a class="maps-btn" href="{html.escape(best['maps_url'])}" target="_blank" rel="noopener">In Google Maps öffnen</a>
-        <p class="perfect-note">{html.escape(perfect.get('hint', ''))}</p>
+        <a class="maps-btn" id="perfect-maps" href="{html.escape(best['maps_url'])}" target="_blank" rel="noopener">In Google Maps öffnen</a>
+        <p class="perfect-note" id="perfect-note">{html.escape(perfect.get('hint', ''))}</p>
       </div>
 
       {alt_html}
@@ -355,8 +364,24 @@ def render_html(payload: dict) -> str:
         else "siehe Empfehlung"
     )
     mj = payload.get("maljevac_now") or {}
-    hero_cars = f"{mj['cars']} Autos" if mj.get("cars") is not None else "—"
-    hero_wait = f"~{mj['wait_min']} min" if mj.get("wait_min") is not None else "—"
+
+    def _hero_side(side: dict | None) -> str:
+        if not side or side.get("cars") is None:
+            return "—"
+        cars = side["cars"]
+        wait = side.get("wait_min")
+        if wait is None:
+            return f"{cars} Autos"
+        return f"{cars} Autos · ~{wait} min"
+
+    hero_bih = _hero_side(mj.get("to_bih"))
+    hero_hr = _hero_side(mj.get("to_hr"))
+    # Fallback if only legacy single-side fields are present
+    if hero_bih == "—" and hero_hr == "—" and mj.get("cars") is not None:
+        wait = mj.get("wait_min")
+        hero_bih = (
+            f"{mj['cars']} Autos · ~{wait} min" if wait is not None else f"{mj['cars']} Autos"
+        )
 
     return f"""<!doctype html>
 <html lang="de">
@@ -879,36 +904,60 @@ def render_html(payload: dict) -> str:
       box-shadow: var(--shadow);
     }}
     .border-now h2 {{ margin-bottom: 6px; }}
-    .border-big {{
+    .border-sides {{
       display: grid;
-      grid-template-columns: 1.2fr 1fr 1fr;
-      gap: 10px;
-      margin-top: 12px;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
     }}
-    .border-big div {{
+    .border-side {{
       background: rgba(255,255,255,0.65);
       border: 1px solid var(--line);
       border-radius: 16px;
-      padding: 12px 10px;
-      text-align: center;
+      padding: 14px 12px;
     }}
-    .border-big span {{ display: block; color: var(--muted); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }}
-    .border-big strong {{
-      display: block; margin-top: 4px;
+    .side-kicker {{
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }}
+    .side-cars {{
+      display: block;
       font-family: "Fraunces", Georgia, serif;
-      font-size: clamp(1.6rem, 7vw, 2.2rem);
+      font-size: clamp(1.55rem, 6vw, 2.1rem);
       letter-spacing: -0.03em;
+      line-height: 1.1;
+    }}
+    .side-cars small {{
+      font-family: "Manrope", system-ui, sans-serif;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }}
+    .side-meta {{
+      display: block;
+      margin-top: 8px;
+      color: var(--ink);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }}
+    .side-note {{
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.35;
     }}
     .border-note {{ margin: 10px 0 0; color: var(--muted); font-size: 0.86rem; line-height: 1.4; }}
-    .border-list {{ list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }}
-    .border-list li {{
-      display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
-      padding: 8px 0; border-top: 1px dashed var(--line); font-size: 0.9rem;
-    }}
-    .border-list strong {{ font-family: "Fraunces", Georgia, serif; }}
     .stale-tag {{ color: var(--warning); font-size: 0.72rem; font-weight: 800; }}
-    @media (max-width: 420px) {{
-      .border-big {{ grid-template-columns: 1fr; }}
+    @media (max-width: 520px) {{
+      .border-sides {{ grid-template-columns: 1fr; }}
     }}
     .lightbox {{
       position: fixed; inset: 0; z-index: 1000;
@@ -993,16 +1042,16 @@ def render_html(payload: dict) -> str:
       <p class="hint">{html.escape(payload["status_hint"])}</p>
       <div class="metrics">
         <div class="metric">
-          <span>Maljevac Autos</span>
-          <strong>{html.escape(hero_cars)}</strong>
+          <span>Einfahrt BiH</span>
+          <strong>{html.escape(hero_bih)}</strong>
         </div>
         <div class="metric">
-          <span>Grenze Wartezeit</span>
-          <strong>{html.escape(hero_wait)}</strong>
+          <span>Einfahrt HR</span>
+          <strong>{html.escape(hero_hr)}</strong>
         </div>
         <div class="metric">
           <span>Perfekte Abfahrt</span>
-          <strong>{html.escape(hero_depart)}</strong>
+          <strong id="hero-depart">{html.escape(hero_depart)}</strong>
         </div>
       </div>
     </header>
@@ -1103,6 +1152,74 @@ def render_html(payload: dict) -> str:
         if (e.key === 'Escape' && box.classList.contains('open')) closeCam();
       }});
     }})();
+
+    // If recommended departure is missed, roll to next-best from cached slots
+    (function advancePerfectLive() {{
+      const raw = document.getElementById('payload');
+      if (!raw) return;
+      let data;
+      try {{ data = JSON.parse(raw.textContent); }} catch (_) {{ return; }}
+      const perfect = data && data.perfect;
+      if (!perfect || !perfect.best) return;
+      const graceMs = 5 * 60 * 1000;
+
+      function upcoming(slots) {{
+        const now = Date.now();
+        return (slots || []).filter((s) => {{
+          const t = Date.parse(s.depart);
+          return !Number.isNaN(t) && t > now - graceMs;
+        }});
+      }}
+
+      function pickBest() {{
+        const pool = upcoming(perfect.top);
+        if (!pool.length) return null;
+        pool.sort((a, b) => {{
+          const aa = Date.parse(a.arrive_buzim || a.depart);
+          const bb = Date.parse(b.arrive_buzim || b.depart);
+          return aa - bb;
+        }});
+        return pool[0];
+      }}
+
+      function apply(best) {{
+        const set = (id, text) => {{
+          const el = document.getElementById(id);
+          if (el && text != null) el.textContent = text;
+        }};
+        set('perfect-time', best.depart_short);
+        set('perfect-day', (best.depart_day || '') + ' · ' + (best.badge || 'nächste beste'));
+        set('perfect-los', best.depart_short);
+        set('perfect-border', best.arrive_border_short);
+        if (best.border_wait_min != null && best.border_cars != null) {{
+          set('perfect-border-meta', '~' + best.border_wait_min + ' min · ' + best.border_cars + ' Autos');
+        }}
+        set('perfect-arrive', best.arrive_buzim_short);
+        set('perfect-total', best.total_label);
+        if (best.distance_km != null) set('perfect-dist', '~' + best.distance_km + ' km');
+        set('perfect-route-id', best.route_id);
+        const maps = document.getElementById('perfect-maps');
+        if (maps && best.maps_url) maps.href = best.maps_url;
+        set('hero-depart', best.depart_label || best.depart_short);
+        document.querySelectorAll('.tl-item').forEach((li) => {{
+          const label = (li.querySelector('.tl-depart') || {{}}).textContent || '';
+          const hit = label.indexOf(best.depart_short) !== -1;
+          li.classList.toggle('best', hit);
+        }});
+      }}
+
+      function tick() {{
+        const next = pickBest();
+        if (!next) return;
+        if (next.depart !== perfect.best.depart) {{
+          next.badge = 'nächste beste';
+          perfect.best = next;
+          apply(next);
+        }}
+      }}
+      tick();
+      setInterval(tick, 30000);
+    }})();
   </script>
 </body>
 </html>
@@ -1110,44 +1227,66 @@ def render_html(payload: dict) -> str:
 
 
 def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
-    if not maljevac_now and not borders:
+    if not maljevac_now:
         return """
     <section class="border-now" aria-labelledby="border-title">
-      <h2 id="border-title">Maljevac jetzt</h2>
-      <p class="empty">Noch keine Grenzdaten. Nächster Monitor-Lauf lädt Nakordoni + Kamera-KI.</p>
+      <h2 id="border-title">Maljevac jetzt (HAK-Kamera)</h2>
+      <p class="empty">Noch keine KI-Zählung. Nächster Monitor-Lauf wertet Cam 430 (→BiH) und 429 (→HR) per gpt-4o-mini aus.</p>
     </section>
     """
-    cars = maljevac_now.get("cars") if maljevac_now else None
-    wait = maljevac_now.get("wait_min") if maljevac_now else None
-    source = html.escape(str((maljevac_now or {}).get("source") or "—"))
-    note = html.escape(str((maljevac_now or {}).get("note") or ""))
-    stale = bool((maljevac_now or {}).get("stale"))
-    trucks = (maljevac_now or {}).get("trucks")
-    cars_label = "—" if cars is None else str(cars)
-    wait_label = "—" if wait is None else f"~{wait} min"
-    trucks_label = "—" if trucks is None else str(trucks)
 
-    others = ""
-    for b in borders[:5]:
-        stale_tag = " <span class='stale-tag'>veraltet</span>" if b.get("stale") else ""
+    def side_card(title: str, side: dict | None) -> str:
+        if not side:
+            return f"""
+            <div class="border-side">
+              <span class="side-kicker">{html.escape(title)}</span>
+              <strong class="side-cars">—</strong>
+              <span class="side-meta">noch keine Zählung</span>
+            </div>
+            """
+        cars = side.get("cars")
+        wait = side.get("wait_min")
+        trucks = side.get("trucks")
+        cars_l = "—" if cars is None else str(cars)
+        wait_l = "—" if wait is None else f"~{wait} min"
+        trucks_l = "" if trucks is None else f" · ~{trucks} LKW"
+        note = html.escape((side.get("note") or "")[:110])
+        return f"""
+            <div class="border-side">
+              <span class="side-kicker">{html.escape(title)}</span>
+              <strong class="side-cars">{html.escape(cars_l)} <small>Autos</small></strong>
+              <span class="side-meta">Wartezeit {html.escape(wait_l)}{html.escape(trucks_l)}</span>
+              {"<span class='side-note'>" + note + "</span>" if note else ""}
+            </div>
+            """
+
+    to_bih = maljevac_now.get("to_bih")
+    to_hr = maljevac_now.get("to_hr")
+    source = html.escape(str(maljevac_now.get("source") or "HAK-Cam"))
+
+    # Optional Nakordoni reference row (not primary)
+    ref = ""
+    for b in borders[:3]:
+        if "maljevac" not in (b.get("name") or "").lower():
+            continue
+        stale = " · veraltet" if b.get("stale") else ""
         cars_b = b["cars"] if b.get("cars") is not None else "—"
         wait_b = f"~{b['wait_min']} min" if b.get("wait_min") is not None else "—"
-        others += (
-            f"<li><span>{html.escape(b.get('name') or '')}{stale_tag}</span>"
-            f"<strong>{cars_b} Autos</strong><span>{wait_b}</span></li>"
+        ref = (
+            f"<p class='border-note'>Nakordoni Referenz: {cars_b} Autos / {wait_b}{stale} "
+            f"(nicht führend — Anzeige kommt von HAK-Kamera)</p>"
         )
+        break
 
     return f"""
     <section class="border-now" aria-labelledby="border-title">
       <h2 id="border-title">Maljevac jetzt</h2>
-      <p class="empty" style="margin:0">Live Autos an der Grenze · Quelle: {source}{" · Achtung veraltet" if stale else ""}</p>
-      <div class="border-big">
-        <div><span>Autos in Schlange</span><strong>{html.escape(cars_label)}</strong></div>
-        <div><span>Wartezeit</span><strong>{html.escape(wait_label)}</strong></div>
-        <div><span>LKW (KI)</span><strong>{html.escape(trucks_label)}</strong></div>
+      <p class="empty" style="margin:0">Live gezählt von HAK-Kameras · {source}</p>
+      <div class="border-sides">
+        {side_card("Einfahrt BiH (HR → BiH)", to_bih)}
+        {side_card("Einfahrt HR (BiH → HR)", to_hr)}
       </div>
-      {"<p class='border-note'>" + note + "</p>" if note else ""}
-      {"<ul class='border-list'>" + others + "</ul>" if others else ""}
+      {ref}
     </section>
     """
 

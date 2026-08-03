@@ -23,10 +23,28 @@ def _base_payload(**overrides):
             "name": "Maljevac",
             "cars": 10,
             "wait_min": 15,
-            "source": "HAK-Cam KI",
-            "note": "Test",
+            "source": "HAK-Cam · gpt-4o-mini",
+            "note": "Live gezählt von HAK-Kameras (OpenAI Vision)",
             "stale": False,
             "trucks": 1,
+            "to_bih": {
+                "name": "Maljevac — Ausreise HR → BiH",
+                "direction": "HR->BiH",
+                "cars": 10,
+                "wait_min": 15,
+                "trucks": 1,
+                "cam_id": 430,
+                "note": "Kurze Schlange Richtung BiH",
+            },
+            "to_hr": {
+                "name": "Maljevac — Einreise BiH → HR",
+                "direction": "BiH->HR",
+                "cars": 4,
+                "wait_min": 8,
+                "trucks": 0,
+                "cam_id": 429,
+                "note": "Wenig Verkehr Richtung HR",
+            },
         },
         "borders": [{"name": "Maljevac", "cars": 10, "wait_min": 15, "stale": False}],
         "stops": [("Waiblingen", "Start"), ("Bužim", "Ziel")],
@@ -57,8 +75,13 @@ def test_render_html_contains_brand_and_status():
     assert 'name="viewport"' in html
     assert "viewport-fit=cover" in html
     assert "Maljevac jetzt" in html
-    assert "Autos in Schlange" in html
-    assert "10 Autos" in html or ">10<" in html
+    assert "Einfahrt BiH (HR → BiH)" in html
+    assert "Einfahrt HR (BiH → HR)" in html
+    assert "Einfahrt BiH" in html
+    assert "Einfahrt HR" in html
+    assert ">10<" in html or "10 Autos" in html
+    assert ">4<" in html or "4 Autos" in html
+    assert "HAK-Cam" in html
 
 
 def test_render_html_perfect_block():
