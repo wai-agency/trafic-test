@@ -68,7 +68,8 @@ jobs:
           NAKORDONI_API_KEY: ${{ secrets.NAKORDONI_API_KEY }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_VISION_MODEL: ${{ secrets.OPENAI_VISION_MODEL }}
           MIN_SEVERITY: ${{ github.event.inputs.min_severity || 'warning' }}
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
         run: |
@@ -114,8 +115,8 @@ jobs:
           NAKORDONI_API_KEY: ${{ secrets.NAKORDONI_API_KEY }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_VISION_MODEL: ${{ secrets.OPENAI_VISION_MODEL }}
         run: traffic-monitor dashboard --out site
 
       - name: Upload dashboard artifact

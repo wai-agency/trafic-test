@@ -1,9 +1,9 @@
-"""HAK (Croatian Auto Club) border cameras with optional Gemini vision analysis.
+"""HAK (Croatian Auto Club) border cameras with optional OpenAI vision analysis.
 
 The live camera JPEGs live under ``https://m.hak.hr/cam.asp?id=<id>``. They are
-always surfaced in the dashboard (no key needed). When a ``GEMINI_API_KEY`` is
-configured, each analysed camera image is sent to Google Gemini Flash (vision) to
-estimate the queue length / wait time and enrich other routing data.
+always surfaced in the dashboard (no key needed). When an ``OPENAI_API_KEY`` is
+configured, each analysed camera image is sent to a cheap OpenAI vision model
+(default ``gpt-4o-mini``) to estimate queue length / wait time and enrich routing.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from traffic_monitor.models import Alert
 console = Console()
 
 HAK_REFERER = "https://m.hak.hr/"
-DEFAULT_MODEL = "gemini-2.0-flash"
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+DEFAULT_MODEL = "gpt-4o-mini"
+OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
@@ -159,7 +159,7 @@ def _alerts_from_cache(data: dict) -> list[Alert]:
 
 
 def fetch_hak_cameras(config: dict) -> list[Alert]:
-    """Analyse configured HAK cameras with Gemini vision (needs GEMINI_API_KEY).
+    """Analyse configured HAK cameras with OpenAI vision (needs OPENAI_API_KEY).
 
     Results are cached ~12 min so monitor / perfect / dashboard share one quota.
     Clear/info verdicts are still returned for the dashboard; Telegram filters them.
@@ -175,15 +175,15 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
         console.print(f"[dim]HAK-Cam: Cache ({n} verdicts)[/dim]")
         return _alerts_from_cache(cached)
 
-    api_key = env("GEMINI_API_KEY")
+    api_key = env("OPENAI_API_KEY")
     if not api_key:
         return []
 
-    model = env("GEMINI_MODEL", hak.get("model") or DEFAULT_MODEL) or DEFAULT_MODEL
+    model = env("OPENAI_VISION_MODEL", hak.get("model") or DEFAULT_MODEL) or DEFAULT_MODEL
     page = str(hak.get("page") or HAK_REFERER)
 
     alerts: list[Alert] = []
-    with httpx.Client(timeout=45.0, headers={"User-Agent": "stuttgart-buzim-traffic/1.0"}) as client:
+    with httpx.Client(timeout=60.0, headers={"User-Agent": "stuttgart-buzim-traffic/1.0"}) as client:
         for cam in cams:
             # Default: only analyse explicitly marked cams (relevant or analyze=true)
             analyze = cam.get("analyze")
@@ -197,7 +197,7 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
             name = str(cam.get("name") or f"HAK Kamera {cam_id}")
             try:
                 image = _download_image(client, cam_id)
-                verdict = _analyze_with_gemini(
+                verdict = _analyze_with_openai(
                     client, image, api_key, model, name, cam.get("direction", "")
                 )
             except httpx.HTTPError as exc:
@@ -207,9 +207,8 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                 msg = str(exc)
                 console.print(f"[yellow]HAK-Cam {cam_id}: {msg}[/yellow]")
                 if "429" in msg:
-                    # Stop further Gemini calls this run; cool down cache
                     _save_cache([], model)
-                    console.print("[yellow]HAK-Cam: Gemini Quota/Rate-Limit — später erneut[/yellow]")
+                    console.print("[yellow]HAK-Cam: OpenAI Rate-Limit — später erneut[/yellow]")
                     return alerts
                 continue
             if verdict is None:
@@ -278,7 +277,6 @@ def maljevac_cam_wait_min(alerts: list[Alert]) -> int | None:
         elif "maljevac" in blob and alert.extras.get("relevant"):
             waits.append(int(alert.delay_min))
     if not waits:
-        # fallback: any Maljevac cam
         for alert in alerts:
             if alert.source != "HAK-Cam" or alert.delay_min is None:
                 continue
@@ -296,7 +294,7 @@ def _download_image(client: httpx.Client, cam_id: object) -> bytes:
     return resp.content
 
 
-def _analyze_with_gemini(
+def _analyze_with_openai(
     client: httpx.Client,
     image: bytes,
     api_key: str,
@@ -307,33 +305,64 @@ def _analyze_with_gemini(
     b64 = base64.b64encode(image).decode("ascii")
     prompt = _PROMPT + f"\nKamera: {name}. Fahrtrichtung: {direction or 'unbekannt'}."
     body = {
-        "contents": [
+        "model": model,
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": [
             {
-                "parts": [
-                    {"text": prompt},
-                    {"inlineData": {"mimeType": "image/jpeg", "data": b64}},
-                ]
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{b64}",
+                            "detail": "low",
+                        },
+                    },
+                ],
             }
         ],
-        "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json"},
     }
-    url = GEMINI_URL.format(model=model)
-    resp = client.post(url, params={"key": api_key}, json=body)
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    resp = client.post(OPENAI_CHAT_URL, headers=headers, json=body)
     if resp.status_code == 429:
         time.sleep(8)
-        resp = client.post(url, params={"key": api_key}, json=body)
+        resp = client.post(OPENAI_CHAT_URL, headers=headers, json=body)
     if resp.status_code >= 400:
-        raise ValueError(f"Gemini {resp.status_code}: {resp.text[:240]}")
-    return parse_gemini_response(resp.json())
+        raise ValueError(f"OpenAI {resp.status_code}: {resp.text[:240]}")
+    return parse_vision_response(resp.json())
 
 
+def parse_vision_response(data: dict) -> dict | None:
+    """Extract and normalise the verdict from an OpenAI chat.completions response."""
+    try:
+        text = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    return normalize_verdict(text)
+
+
+# Back-compat alias for older tests / imports
 def parse_gemini_response(data: dict) -> dict | None:
-    """Extract and normalise the verdict from a Gemini generateContent response."""
+    """Deprecated alias — accepts either Gemini-shaped or OpenAI-shaped payloads."""
+    if isinstance(data, dict) and "choices" in data:
+        return parse_vision_response(data)
     try:
         text = data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError, TypeError):
         return None
-    verdict = _extract_json(text)
+    return normalize_verdict(text)
+
+
+def normalize_verdict(text: str | dict) -> dict | None:
+    if isinstance(text, dict):
+        verdict = text
+    else:
+        verdict = _extract_json(str(text))
     if not isinstance(verdict, dict):
         return None
 

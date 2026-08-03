@@ -7,7 +7,7 @@ from traffic_monitor.models import Alert
 CONFIG = {
     "hak_cameras": {
         "page": "https://m.hak.hr/kamera.asp?g=2&k=177",
-        "model": "gemini-2.0-flash",
+        "model": "gpt-4o-mini",
         "analyze_min_severity": "warning",
         "cams": [
             {"id": 430, "name": "Maljevac — Ausreise HR → BiH", "direction": "HR->BiH", "relevant": True},
@@ -17,13 +17,13 @@ CONFIG = {
 }
 
 
-def _gemini_payload(text: str) -> dict:
-    return {"candidates": [{"content": {"parts": [{"text": text}]}}]}
+def _openai_payload(text: str) -> dict:
+    return {"choices": [{"message": {"content": text}}]}
 
 
-def test_parse_gemini_plain_json():
-    v = hc.parse_gemini_response(
-        _gemini_payload(
+def test_parse_openai_plain_json():
+    v = hc.parse_vision_response(
+        _openai_payload(
             '{"vehicles": 12, "trucks": 1, "wait_min": 40, "severity": "warning", '
             '"weather": "sunny", "road": "stockend", "summary": "Mittlere Kolonne"}'
         )
@@ -36,32 +36,32 @@ def test_parse_gemini_plain_json():
     assert v["road"] == "stockend"
 
 
-def test_parse_gemini_fenced_json():
+def test_parse_openai_fenced_json():
     text = "```json\n{\"vehicles\": 25, \"wait_min\": 90, \"severity\": \"critical\", \"summary\": \"Lange Schlange\"}\n```"
-    v = hc.parse_gemini_response(_gemini_payload(text))
+    v = hc.parse_vision_response(_openai_payload(text))
     assert v["severity"] == "critical"
     assert v["vehicles"] == 25
     assert v["wait_min"] == 90
 
 
-def test_parse_gemini_bad_severity_defaults_warning():
-    v = hc.parse_gemini_response(_gemini_payload('{"vehicles": 3, "severity": "banana"}'))
+def test_parse_bad_severity_defaults_warning():
+    v = hc.parse_vision_response(_openai_payload('{"vehicles": 3, "severity": "banana"}'))
     assert v["severity"] == "warning"
     assert v["wait_min"] is None
 
 
-def test_parse_gemini_garbage_returns_none():
-    assert hc.parse_gemini_response(_gemini_payload("kein json hier")) is None
-    assert hc.parse_gemini_response({"nope": 1}) is None
+def test_parse_garbage_returns_none():
+    assert hc.parse_vision_response(_openai_payload("kein json hier")) is None
+    assert hc.parse_vision_response({"nope": 1}) is None
 
 
 def test_no_api_key_no_alerts(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert hc.fetch_hak_cameras(CONFIG) == []
 
 
 def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
-    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(hc, "_CACHE_PATH", tmp_path / "cam_cache.json")
     monkeypatch.setattr(hc, "_download_image", lambda client, cam_id: b"\xff\xd8\xff")
 
@@ -90,24 +90,22 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
         cam_id = 430 if "Ausreise" in name else 429
         return verdicts[cam_id]
 
-    monkeypatch.setattr(hc, "_analyze_with_gemini", fake_analyze)
+    monkeypatch.setattr(hc, "_analyze_with_openai", fake_analyze)
 
-    # Without explicit analyze flags: only relevant cam (430) is analysed
     alerts = hc.fetch_hak_cameras(CONFIG)
     assert len(alerts) == 1
     assert alerts[0].severity == "critical"
     assert alerts[0].delay_min == 80
     assert alerts[0].extras["image_url"] == "https://m.hak.hr/cam.asp?id=430"
-    assert "gemini-2.0-flash" in alerts[0].detail
+    assert "gpt-4o-mini" in alerts[0].detail
 
-    # Second call hits cache (no extra Gemini call)
     calls = {"n": 0}
 
     def boom(*_a, **_k):
         calls["n"] += 1
         raise AssertionError("should use cache")
 
-    monkeypatch.setattr(hc, "_analyze_with_gemini", boom)
+    monkeypatch.setattr(hc, "_analyze_with_openai", boom)
     cached = hc.fetch_hak_cameras(CONFIG)
     assert len(cached) == 1
     assert calls["n"] == 0
@@ -149,7 +147,7 @@ def test_dashboard_embeds_cameras():
         source="HAK-Cam",
         severity="critical",
         title="Kamera: Maljevac — Ausreise HR → BiH",
-        detail="Lange Kolonne | KI: gemini-2.0-flash",
+        detail="Lange Kolonne | KI: gpt-4o-mini",
         location="Maljevac — Ausreise HR → BiH",
         delay_min=80,
         extras={"vehicles": 22, "weather": "sunny", "road": "dicht"},

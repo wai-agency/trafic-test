@@ -78,11 +78,11 @@ nakordoni:
     - Petrovo Selo
 
 # HAK live border cameras (m.hak.hr). Always embedded in the dashboard.
-# AI queue analysis (Google Gemini Flash) runs only when GEMINI_API_KEY is set.
+# AI queue analysis (OpenAI vision) runs only when OPENAI_API_KEY is set.
 hak_cameras:
   page: "https://m.hak.hr/kamera.asp?g=2&k=177"
-  # Gemini vision model (cheap + vision). Override via GEMINI_MODEL env if needed.
-  model: gemini-2.0-flash
+  # Cheap OpenAI vision model. Override via OPENAI_VISION_MODEL env if needed.
+  model: gpt-4o-mini
   # Only alert from AI verdicts at/above this severity.
   analyze_min_severity: warning
   cams:
@@ -90,7 +90,7 @@ hak_cameras:
       name: "Maljevac — Ausreise HR → BiH"
       direction: "HR->BiH"
       relevant: true
-      analyze: true   # Gemini KI (Quota) — nur diese Cam standardmäßig
+      analyze: true   # OpenAI Vision — nur diese Cam standardmäßig
     - id: 429
       name: "Maljevac — Einreise BiH → HR"
       direction: "BiH->HR"

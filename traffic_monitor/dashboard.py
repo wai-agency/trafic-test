@@ -896,7 +896,7 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Auto-Refresh alle 15 Min · Perfect + HAK-Kameras + optional Gemini-KI</footer>
+    <footer>BuzimLine · Auto-Refresh alle 15 Min · Perfect + HAK-Kameras + optional OpenAI Vision</footer>
   </main>
   <script type="application/json" id="payload">{payload_json}</script>
   <script>
