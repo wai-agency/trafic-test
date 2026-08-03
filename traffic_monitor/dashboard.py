@@ -13,6 +13,7 @@ from traffic_monitor.models import Alert
 from traffic_monitor.perfect_depart import load_perfect_json
 from traffic_monitor.recommend import TZ, _score, recommend_departure
 from traffic_monitor.sources import fetch_all
+from traffic_monitor.sources.hak_cameras import cameras_from_config
 
 console = Console()
 
@@ -59,6 +60,23 @@ def _payload_from_alerts(
     best = _best_slot(now)
     route = config.get("route") or {}
 
+    cam_verdicts = {
+        a.location: a
+        for a in alerts
+        if a.source == "HAK-Cam"
+    }
+    cameras = []
+    for cam in cameras_from_config(config):
+        verdict = cam_verdicts.get(cam["name"])
+        cameras.append(
+            {
+                **cam,
+                "severity": verdict.severity if verdict else None,
+                "verdict": verdict.detail if verdict else None,
+                "wait_min": verdict.delay_min if verdict else None,
+            }
+        )
+
     return {
         "generated_at": now.isoformat(),
         "generated_label": now.strftime("%d.%m.%Y %H:%M"),
@@ -75,6 +93,7 @@ def _payload_from_alerts(
         "best_departure": best,
         "perfect": perfect,
         "stops": ROUTE_STOPS,
+        "cameras": cameras,
         "alerts": [
             {
                 "severity": a.severity,
@@ -275,6 +294,7 @@ def render_html(payload: dict) -> str:
         for n, t in payload["stops"]
     )
     checks_html = "".join(f"<li>{html.escape(c)}</li>" for c in payload["checklist"])
+    cameras_html = "".join(_camera_card(c) for c in payload.get("cameras", []))
     links_html = "".join(
         f'<a href="{html.escape(l["url"])}" target="_blank" rel="noopener">{html.escape(l["label"])}</a>'
         for l in payload["links"]
@@ -762,6 +782,25 @@ def render_html(payload: dict) -> str:
       min-height: 44px; display: inline-flex; align-items: center;
     }}
     .empty {{ color: var(--muted); margin: 0; }}
+    .cams {{ display: grid; grid-template-columns: 1fr; gap: 14px; }}
+    @media (min-width: 560px) {{ .cams {{ grid-template-columns: 1fr 1fr; }} }}
+    .cam {{
+      border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+      background: #fffaf0;
+    }}
+    .cam.relevant {{ border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(31,107,87,0.18); }}
+    .cam img {{ display: block; width: 100%; height: auto; background: #dfe6e2; }}
+    .cam-body {{ padding: 10px 12px; }}
+    .cam-name {{ font-weight: 700; font-size: 0.92rem; margin: 0 0 4px; }}
+    .cam-meta {{ color: var(--muted); font-size: 0.8rem; margin: 0; line-height: 1.35; }}
+    .cam-sev {{
+      display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; padding: 3px 7px; border-radius: 999px; margin-bottom: 4px;
+      background: #ece7da; color: var(--muted);
+    }}
+    .cam-sev.critical {{ background: #f8d7d4; color: var(--critical); }}
+    .cam-sev.warning {{ background: #fce7c8; color: var(--warning); }}
+    .cam-sev.clear {{ background: #ddece7; color: var(--clear); }}
     footer {{
       margin-top: 18px; color: var(--muted); font-size: 0.78rem; text-align: center;
     }}
@@ -841,6 +880,8 @@ def render_html(payload: dict) -> str:
       <div class="alerts">{alerts_html}</div>
     </section>
 
+    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
+
     <section aria-labelledby="check-title">
       <h2 id="check-title">Vor dem Losfahren</h2>
       <ul class="checklist">{checks_html}</ul>
@@ -863,6 +904,36 @@ def render_html(payload: dict) -> str:
 </body>
 </html>
 """
+
+
+def _camera_card(cam: dict) -> str:
+    name = html.escape(cam.get("name") or "")
+    direction = html.escape(cam.get("direction") or "")
+    img = html.escape(cam.get("image_url") or "")
+    relevant = " relevant" if cam.get("relevant") else ""
+    severity = cam.get("severity")
+    sev_html = (
+        f'<span class="cam-sev {html.escape(severity)}">{html.escape(severity)}</span><br/>'
+        if severity
+        else ""
+    )
+    wait = cam.get("wait_min")
+    meta_bits = []
+    if direction:
+        meta_bits.append(direction)
+    if wait is not None:
+        meta_bits.append(f"KI-Wartezeit ~{wait} min")
+    meta = html.escape(" · ".join(meta_bits))
+    return f"""
+    <figure class="cam{relevant}">
+      <img src="{img}" alt="HAK Kamera {name}" loading="lazy" />
+      <figcaption class="cam-body">
+        {sev_html}
+        <p class="cam-name">{name}</p>
+        <p class="cam-meta">{meta}</p>
+      </figcaption>
+    </figure>
+    """
 
 
 def _alert_row(alert: dict) -> str:

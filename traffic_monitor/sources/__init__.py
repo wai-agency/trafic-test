@@ -4,6 +4,7 @@ from traffic_monitor.models import Alert
 from traffic_monitor.sources.asfinag import fetch_asfinag
 from traffic_monitor.sources.autobahn import fetch_autobahn
 from traffic_monitor.sources.gpmaljevac import fetch_gpmaljevac
+from traffic_monitor.sources.hak_cameras import fetch_hak_cameras
 from traffic_monitor.sources.nakordoni import fetch_nakordoni
 from traffic_monitor.sources.promet import fetch_promet
 
@@ -16,6 +17,7 @@ def fetch_all(config: dict) -> list[Alert]:
         fetch_promet,
         fetch_gpmaljevac,
         fetch_nakordoni,
+        fetch_hak_cameras,
     )
     for fetch in fetchers:
         try:

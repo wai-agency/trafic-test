@@ -77,5 +77,25 @@ nakordoni:
     - Litscho Petrowo Selo
     - Petrovo Selo
 
+# HAK live border cameras (m.hak.hr). Always embedded in the dashboard.
+# AI queue analysis (Google Gemini Flash) runs only when GEMINI_API_KEY is set.
+hak_cameras:
+  page: "https://m.hak.hr/kamera.asp?g=2&k=177"
+  # Gemini vision model (cheap + vision). Override via GEMINI_MODEL env if needed.
+  model: gemini-2.0-flash
+  # Only alert from AI verdicts at/above this severity.
+  analyze_min_severity: warning
+  cams:
+    - id: 430
+      name: "Maljevac — Ausreise HR → BiH"
+      direction: "HR->BiH"
+      relevant: true
+    - id: 429
+      name: "Maljevac — Einreise BiH → HR"
+      direction: "BiH->HR"
+    - id: 406
+      name: "Velika Kladuša (BiH)"
+      direction: "BiH"
+
 poll_interval_sec: 300
 cooldown_sec: 1800

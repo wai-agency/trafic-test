@@ -66,6 +66,7 @@ jobs:
           NAKORDONI_API_KEY: ${{ secrets.NAKORDONI_API_KEY }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MIN_SEVERITY: ${{ github.event.inputs.min_severity || 'warning' }}
           FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
         run: |
