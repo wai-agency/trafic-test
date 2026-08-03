@@ -7,6 +7,7 @@ from traffic_monitor import __version__
 from traffic_monitor.dashboard import serve_dashboard, write_dashboard
 from traffic_monitor.depart import advise_today
 from traffic_monitor.monitor import run_once, watch
+from traffic_monitor.perfect_depart import optimize as perfect_depart
 from traffic_monitor.recommend import print_travel_plan
 
 
@@ -54,12 +55,18 @@ def build_parser() -> argparse.ArgumentParser:
     dep.add_argument("--notify", action="store_true", help="Ergebnis per Telegram senden")
     dep.add_argument("--console-only", action="store_true")
 
+    perf = sub.add_parser(
+        "perfect",
+        help="Perfekte Abfahrt: Live-Stau komplette Route + Maljevac-Forecast",
+    )
+    perf.add_argument("--notify", action="store_true")
+    perf.add_argument("--console-only", action="store_true")
+
     parser.epilog = """Examples:
-  traffic-monitor recommend
+  traffic-monitor perfect --notify
   traffic-monitor depart --notify
   traffic-monitor check --notify
   traffic-monitor dashboard --serve
-  traffic-monitor watch --interval 300
 """
     return parser
 
@@ -100,6 +107,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "depart":
         advise_today(notify=args.notify or args.console_only, console_only=args.console_only)
+        return 0
+
+    if args.command == "perfect":
+        perfect_depart(notify=args.notify or args.console_only, console_only=args.console_only)
         return 0
 
     parser.print_help()

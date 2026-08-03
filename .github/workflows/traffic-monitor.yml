@@ -83,6 +83,10 @@ jobs:
             traffic-monitor depart --notify
           fi
 
+          if [[ "${{ github.event.head_commit.message }}" == *"[perfect]"* ]]; then
+            traffic-monitor perfect --notify
+          fi
+
           if [ "$FORCE_NOTIFY" = "true" ]; then
             python - <<'PY'
           import os, httpx
