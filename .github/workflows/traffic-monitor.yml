@@ -38,7 +38,7 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,9 +83,12 @@ jobs:
             traffic-monitor depart --notify
           fi
 
+          mkdir -p site
+          PERFECT_ARGS=(--out site/perfect.json)
           if [[ "${{ github.event.head_commit.message }}" == *"[perfect]"* ]]; then
-            traffic-monitor perfect --notify
+            PERFECT_ARGS+=(--notify)
           fi
+          traffic-monitor perfect "${PERFECT_ARGS[@]}" || echo "::warning::Perfect-Abfahrt konnte nicht berechnet werden"
 
           if [ "$FORCE_NOTIFY" = "true" ]; then
             python - <<'PY'

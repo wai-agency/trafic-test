@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -9,12 +11,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from traffic_monitor.config import env, load_config
+from traffic_monitor.config import env
 from traffic_monitor.depart import WAIBLINGEN, with_origin
 from traffic_monitor.models import Alert
 from traffic_monitor.notifiers import build_notifiers
 from traffic_monitor.reroute import ROUTES, RouteOption
-from traffic_monitor.sources.nakordoni import fetch_nakordoni
 
 console = Console()
 TZ = ZoneInfo("Europe/Berlin")
@@ -152,37 +153,28 @@ def candidate_routes() -> list[RouteOption]:
 
 
 def departure_slots(now: datetime) -> list[datetime]:
+    """Dense sampling for the next ~30h (afternoon/evening + overnight)."""
     slots: list[datetime] = []
-    # rest of Monday afternoon/evening + night + early Tuesday
-    day = now.date()
-    for hour, minute in (
-        (15, 0),
-        (15, 30),
-        (16, 0),
-        (16, 30),
-        (17, 0),
-        (17, 30),
-        (18, 0),
-        (19, 0),
-        (20, 0),
-        (21, 0),
-        (22, 0),
-        (23, 0),
-        (0, 0),  # Tuesday
-        (1, 0),
-        (2, 0),
-        (3, 0),
-        (4, 0),
-    ):
-        if hour >= 15:
-            dt = datetime(day.year, day.month, day.day, hour, minute, tzinfo=TZ)
+    cursor = now.replace(second=0, microsecond=0) + timedelta(minutes=30)
+    # snap to :00 or :30
+    if cursor.minute < 30:
+        cursor = cursor.replace(minute=30)
+    else:
+        cursor = (cursor + timedelta(hours=1)).replace(minute=0)
+    end = now + timedelta(hours=30)
+    t = cursor
+    while t <= end:
+        hour = t.hour
+        if 14 <= hour <= 22:
+            slots.append(t)
+            t += timedelta(minutes=30)
+        elif hour >= 23 or hour <= 5:
+            if t.minute == 0:
+                slots.append(t)
+            t += timedelta(hours=1)
+            t = t.replace(minute=0)
         else:
-            # early hours => next calendar day
-            nxt = day + timedelta(days=1)
-            dt = datetime(nxt.year, nxt.month, nxt.day, hour, minute, tzinfo=TZ)
-        if dt <= now + timedelta(minutes=10):
-            continue
-        slots.append(dt)
+            t = (t + timedelta(hours=1)).replace(minute=0)
     return slots
 
 
@@ -229,11 +221,36 @@ def score_slot(
     )
 
 
-def optimize(
-    *,
-    notify: bool = False,
-    console_only: bool = False,
-) -> str:
+def _slot_dict(s: SlotScore, *, badge: str | None = None) -> dict:
+    return {
+        "badge": badge,
+        "depart": s.depart.isoformat(),
+        "depart_label": s.depart.strftime("%a %d.%m. %H:%M"),
+        "depart_short": s.depart.strftime("%H:%M"),
+        "depart_day": s.depart.strftime("%a %d.%m."),
+        "arrive_border": s.arrive_border.isoformat(),
+        "arrive_border_label": s.arrive_border.strftime("%a %d.%m. %H:%M"),
+        "arrive_border_short": s.arrive_border.strftime("%H:%M"),
+        "arrive_buzim": s.arrive_buzim.isoformat(),
+        "arrive_buzim_label": s.arrive_buzim.strftime("%a %d.%m. %H:%M"),
+        "arrive_buzim_short": s.arrive_buzim.strftime("%H:%M"),
+        "border_wait_min": s.border_wait_min,
+        "border_cars": round(s.border_cars, 1),
+        "drive_min": s.drive_sec // 60,
+        "total_min": s.total_sec // 60,
+        "total_label": s.fmt_dur(),
+        "distance_km": round(s.distance_m / 1000),
+        "route_id": s.route.id,
+        "route_title": s.route.title,
+        "route_summary": s.route.summary,
+        "maps_url": s.route.google_maps_url(),
+        "provider": s.provider,
+        "notes": s.notes,
+        "stops": list(s.route.labels),
+    }
+
+
+def compute_perfect_payload() -> dict:
     now = datetime.now(TZ)
     nk_key = env("NAKORDONI_API_KEY")
     google_key = env("GOOGLE_MAPS_API_KEY")
@@ -254,13 +271,79 @@ def optimize(
     if not scored:
         raise SystemExit("Keine Scores berechnet")
 
-    # Rank: earliest arrival at Bužim, tie-break lower border wait / lower border cars
     scored.sort(key=lambda s: (s.arrive_buzim, s.border_wait_min, s.border_cars, s.drive_sec))
     best = scored[0]
-
-    # Also find best among "low border risk" (forecast cars <= 3.5)
     low_border = [s for s in scored if s.border_cars <= 3.5]
     best_low = min(low_border, key=lambda s: s.arrive_buzim) if low_border else None
+
+    # Unique departure times for primary route (timeline strip)
+    primary = [s for s in scored if s.route.id == "primary"]
+    primary.sort(key=lambda s: s.depart)
+    timeline = []
+    for s in primary:
+        load = "frei" if s.border_cars <= 3.0 else ("ok" if s.border_cars <= 5.0 else "voll")
+        timeline.append(
+            {
+                "depart_short": s.depart.strftime("%H:%M"),
+                "depart_day": s.depart.strftime("%a"),
+                "depart": s.depart.isoformat(),
+                "arrive_buzim_short": s.arrive_buzim.strftime("%H:%M"),
+                "border_wait_min": s.border_wait_min,
+                "border_cars": round(s.border_cars, 1),
+                "total_label": s.fmt_dur(),
+                "load": load,
+                "is_best": s.depart == best.depart and s.route.id == best.route.id,
+            }
+        )
+
+    return {
+        "generated_at": now.isoformat(),
+        "generated_label": now.strftime("%d.%m.%Y %H:%M"),
+        "origin": "Waiblingen",
+        "destination": "Bužim",
+        "provider": best.provider,
+        "best": _slot_dict(best, badge="früheste Ankunft"),
+        "best_low_border": (
+            _slot_dict(best_low, badge="freie Grenze")
+            if best_low and best_low.depart != best.depart
+            else None
+        ),
+        "top": [_slot_dict(s) for s in scored[:8]],
+        "timeline": timeline,
+        "hint": (
+            "Google bewertet Straßenstau live/prognostisch; "
+            "Grenze kommt vom Nakordoni-Forecast Maljevac."
+        ),
+    }
+
+
+def write_perfect_json(path: str | Path, payload: dict | None = None) -> Path:
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    data = payload if payload is not None else compute_perfect_payload()
+    out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out
+
+
+def load_perfect_json(path: str | Path) -> dict | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def optimize(
+    *,
+    notify: bool = False,
+    console_only: bool = False,
+    out: str | Path | None = None,
+) -> str:
+    payload = compute_perfect_payload()
+    best = payload["best"]
+    best_low = payload.get("best_low_border")
 
     table = Table(title="Top Abfahrten Waiblingen → Bužim (komplett)")
     table.add_column("Los")
@@ -269,60 +352,63 @@ def optimize(
     table.add_column("An Bužim")
     table.add_column("Route")
     table.add_column("Total")
-    for s in scored[:12]:
+    for s in payload["top"]:
         table.add_row(
-            s.depart.strftime("%a %H:%M"),
-            s.arrive_border.strftime("%a %H:%M"),
-            f"~{s.border_wait_min}m/{s.border_cars:.1f}A",
-            s.arrive_buzim.strftime("%a %H:%M"),
-            s.route.id,
-            s.fmt_dur(),
+            s["depart_label"],
+            s["arrive_border_label"],
+            f"~{s['border_wait_min']}m/{s['border_cars']}A",
+            s["arrive_buzim_label"],
+            s["route_id"],
+            s["total_label"],
         )
     console.print(table)
 
     lines = [
-        f"Stand: {now.strftime('%a %d.%m.%Y %H:%M')} Europe/Berlin",
+        f"Stand: {payload['generated_label']} Europe/Berlin",
         "Ziel: schnell ankommen + wenig Stau + kurze Grenze Maljevac/BiH",
-        f"Routing: {best.provider}",
+        f"Routing: {payload['provider']}",
         "",
         "🏆 EMPFEHLUNG (früheste Ankunft Bužim):",
-        f"Los: {best.depart.strftime('%a %d.%m. %H:%M')}",
-        f"Route: {best.route.title}",
-        f"{best.route.summary}",
-        f"An Grenze ca.: {best.arrive_border.strftime('%a %d.%m. %H:%M')}",
-        f"Grenzwartezeit ca.: {best.border_wait_min} min ({best.notes})",
-        f"An Bužim ca.: {best.arrive_buzim.strftime('%a %d.%m. %H:%M')}",
-        f"Gesamt: {best.fmt_dur()} | ~{best.distance_m/1000:.0f} km",
-        f"Maps: {best.route.google_maps_url()}",
+        f"Los: {best['depart_label']}",
+        f"Route: {best['route_title']}",
+        f"{best['route_summary']}",
+        f"An Grenze ca.: {best['arrive_border_label']}",
+        f"Grenzwartezeit ca.: {best['border_wait_min']} min ({best['notes']})",
+        f"An Bužim ca.: {best['arrive_buzim_label']}",
+        f"Gesamt: {best['total_label']} | ~{best['distance_km']} km",
+        f"Maps: {best['maps_url']}",
     ]
-    if best_low and best_low.depart != best.depart:
+    if best_low:
         lines += [
             "",
             "🌙 Beste Variante mit freier Grenze (Forecast ≤ ~3.5 Autos):",
-            f"Los: {best_low.depart.strftime('%a %d.%m. %H:%M')}",
-            f"Route: {best_low.route.title}",
-            f"An Grenze ca.: {best_low.arrive_border.strftime('%a %d.%m. %H:%M')}",
-            f"Grenze ca.: {best_low.border_wait_min} min / {best_low.border_cars:.1f} Autos",
-            f"An Bužim ca.: {best_low.arrive_buzim.strftime('%a %d.%m. %H:%M')}",
-            f"Maps: {best_low.route.google_maps_url()}",
+            f"Los: {best_low['depart_label']}",
+            f"Route: {best_low['route_title']}",
+            f"An Grenze ca.: {best_low['arrive_border_label']}",
+            f"Grenze ca.: {best_low['border_wait_min']} min / {best_low['border_cars']} Autos",
+            f"An Bužim ca.: {best_low['arrive_buzim_label']}",
+            f"Maps: {best_low['maps_url']}",
         ]
-
-    lines += [
-        "",
-        "Hinweis: Google bewertet Straßenstau live/prognostisch; Grenze kommt von Nakordoni-Forecast Maljevac.",
-    ]
+    lines += ["", f"Hinweis: {payload['hint']}"]
     text = "\n".join(lines)
     console.print(Panel(text, title="Perfekte Abfahrt", border_style="green"))
+
+    if out:
+        write_perfect_json(out, payload)
+        console.print(f"[green]Perfect JSON:[/green] {out}")
 
     if notify:
         msg = Alert(
             source="PerfectDepart",
             severity="critical",
-            title=f"🚗 Perfekte Abfahrt: {best.depart.strftime('%a %H:%M')} → Bužim ~{best.arrive_buzim.strftime('%H:%M')}",
+            title=(
+                f"🚗 Perfekte Abfahrt: {best['depart_short']} → "
+                f"Bužim ~{best['arrive_buzim_short']}"
+            ),
             detail=text,
             location="Waiblingen → Bužim",
-            url=best.route.google_maps_url(),
-            event_id=f"perfect:{best.depart.strftime('%Y%m%d%H%M')}:{best.route.id}",
+            url=best["maps_url"],
+            event_id=f"perfect:{best['depart']}:{best['route_id']}",
         )
         build_notifiers(console_only=console_only).send(msg)
     return text

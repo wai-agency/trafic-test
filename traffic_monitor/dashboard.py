@@ -10,13 +10,14 @@ from rich.console import Console
 
 from traffic_monitor.config import load_config
 from traffic_monitor.models import Alert
+from traffic_monitor.perfect_depart import load_perfect_json
 from traffic_monitor.recommend import TZ, _score, recommend_departure
 from traffic_monitor.sources import fetch_all
 
 console = Console()
 
 ROUTE_STOPS = [
-    ("Stuttgart", "Start"),
+    ("Waiblingen", "Start"),
     ("Salzburg", "AT"),
     ("Tauern", "A10"),
     ("Karawanken", "A11"),
@@ -26,12 +27,17 @@ ROUTE_STOPS = [
 ]
 
 
-def build_dashboard_payload(config_path: str | None = None) -> dict:
+def build_dashboard_payload(config_path: str | None = None, *, perfect: dict | None = None) -> dict:
     config = load_config(config_path)
-    return _payload_from_alerts(config, fetch_all(config))
+    return _payload_from_alerts(config, fetch_all(config), perfect=perfect)
 
 
-def _payload_from_alerts(config: dict, alerts: list[Alert]) -> dict:
+def _payload_from_alerts(
+    config: dict,
+    alerts: list[Alert],
+    *,
+    perfect: dict | None = None,
+) -> dict:
     now = datetime.now(TZ)
     actionable = [a for a in alerts if a.severity in {"warning", "critical"} and a.title != "Quelle nicht erreichbar"]
     critical_n = sum(1 for a in actionable if a.severity == "critical")
@@ -58,15 +64,16 @@ def _payload_from_alerts(config: dict, alerts: list[Alert]) -> dict:
         "generated_label": now.strftime("%d.%m.%Y %H:%M"),
         "tz": "Europe/Berlin",
         "brand": "BuzimLine",
-        "from": route.get("from", "Stuttgart"),
+        "from": route.get("from", "Waiblingen"),
         "to": route.get("to", "Bužim"),
         "via": route.get("via", ""),
-        "approx_km": route.get("approx_km", 930),
+        "approx_km": route.get("approx_km", 960),
         "status": status,
         "status_label": status_label,
         "status_hint": status_hint,
         "counts": {"critical": critical_n, "warning": warning_n, "total": len(alerts)},
         "best_departure": best,
+        "perfect": perfect,
         "stops": ROUTE_STOPS,
         "alerts": [
             {
@@ -133,6 +140,128 @@ def _best_slot(now: datetime) -> dict:
     }
 
 
+def _perfect_section(perfect: dict | None) -> str:
+    if not perfect or not perfect.get("best"):
+        return """
+    <section class="perfect perfect-empty" aria-labelledby="perfect-title">
+      <h2 id="perfect-title">Perfekte Abfahrt</h2>
+      <p class="empty">Noch keine Live-Optimierung. Wird mit dem nächsten Monitor-Lauf berechnet.</p>
+    </section>
+    """
+
+    best = perfect["best"]
+    alt = perfect.get("best_low_border")
+    timeline = perfect.get("timeline") or []
+    top = perfect.get("top") or []
+
+    timeline_html = "".join(
+        f"""
+        <li class="tl-item load-{html.escape(t.get('load', 'ok'))}{' best' if t.get('is_best') else ''}">
+          <span class="tl-depart">{html.escape(t.get('depart_day', ''))} {html.escape(t['depart_short'])}</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~{t['border_wait_min']}m · Bužim {html.escape(t['arrive_buzim_short'])}</span>
+        </li>
+        """
+        for t in timeline[:14]
+    )
+
+    top_html = "".join(
+        f"""
+        <li class="slot-row">
+          <div class="slot-when">
+            <strong>{html.escape(s['depart_short'])}</strong>
+            <span>{html.escape(s['depart_day'])}</span>
+          </div>
+          <div class="slot-path">
+            <span>Grenze {html.escape(s['arrive_border_short'])} · ~{s['border_wait_min']} min</span>
+            <span>{html.escape(s['route_id'])} · {html.escape(s['total_label'])}</span>
+          </div>
+          <div class="slot-arrive">
+            <strong>{html.escape(s['arrive_buzim_short'])}</strong>
+            <span>Bužim</span>
+          </div>
+        </li>
+        """
+        for s in top[:6]
+    )
+
+    alt_html = ""
+    if alt:
+        alt_html = f"""
+        <div class="perfect-alt">
+          <div class="alt-kicker">Freiere Grenze</div>
+          <div class="alt-grid">
+            <div><span>Los</span><strong>{html.escape(alt['depart_label'])}</strong></div>
+            <div><span>Grenze</span><strong>~{alt['border_wait_min']} min</strong></div>
+            <div><span>Bužim</span><strong>{html.escape(alt['arrive_buzim_short'])}</strong></div>
+          </div>
+          <a class="maps-btn ghost" href="{html.escape(alt['maps_url'])}" target="_blank" rel="noopener">Maps öffnen</a>
+        </div>
+        """
+
+    stops = best.get("stops") or []
+    journey = " → ".join(html.escape(x.split(",")[0]) for x in stops) if stops else html.escape(
+        best.get("route_summary") or ""
+    )
+
+    return f"""
+    <section class="perfect" aria-labelledby="perfect-title">
+      <div class="perfect-head">
+        <h2 id="perfect-title">Perfekte Abfahrt</h2>
+        <span class="perfect-stamp">Live · {html.escape(perfect.get('generated_label', ''))}</span>
+      </div>
+
+      <div class="perfect-hero">
+        <p class="perfect-kicker">Waiblingen → Bužim · komplette Route</p>
+        <p class="perfect-time">{html.escape(best['depart_short'])}</p>
+        <p class="perfect-day">{html.escape(best['depart_day'])} · {html.escape(best.get('badge') or 'Empfehlung')}</p>
+
+        <ol class="journey" aria-label="Reisezeitlinie">
+          <li>
+            <span class="j-label">Los</span>
+            <strong>{html.escape(best['depart_short'])}</strong>
+            <span class="j-sub">Waiblingen</span>
+          </li>
+          <li class="j-line" aria-hidden="true"></li>
+          <li>
+            <span class="j-label">Grenze</span>
+            <strong>{html.escape(best['arrive_border_short'])}</strong>
+            <span class="j-sub">~{best['border_wait_min']} min · {best['border_cars']} Autos</span>
+          </li>
+          <li class="j-line" aria-hidden="true"></li>
+          <li>
+            <span class="j-label">Ziel</span>
+            <strong>{html.escape(best['arrive_buzim_short'])}</strong>
+            <span class="j-sub">Bužim</span>
+          </li>
+        </ol>
+
+        <div class="perfect-stats">
+          <div><span>Gesamt</span><strong>{html.escape(best['total_label'])}</strong></div>
+          <div><span>Distanz</span><strong>~{best['distance_km']} km</strong></div>
+          <div><span>Route</span><strong>{html.escape(best['route_id'])}</strong></div>
+        </div>
+
+        <p class="perfect-route">{journey}</p>
+        <a class="maps-btn" href="{html.escape(best['maps_url'])}" target="_blank" rel="noopener">In Google Maps öffnen</a>
+        <p class="perfect-note">{html.escape(perfect.get('hint', ''))}</p>
+      </div>
+
+      {alt_html}
+
+      <div class="perfect-timeline-wrap">
+        <h3>Abfahrtsfenster (Hauptroute)</h3>
+        <ol class="timeline">{timeline_html or '<li class="empty">Keine Slots</li>'}</ol>
+      </div>
+
+      <div class="perfect-slots-wrap">
+        <h3>Top Alternativen</h3>
+        <ol class="slot-list">{top_html}</ol>
+      </div>
+    </section>
+    """
+
+
 def render_html(payload: dict) -> str:
     alerts_html = "".join(_alert_row(a) for a in payload["alerts"]) or (
         '<p class="empty">Keine relevanten Meldungen gerade.</p>'
@@ -150,7 +279,20 @@ def render_html(payload: dict) -> str:
         f'<a href="{html.escape(l["url"])}" target="_blank" rel="noopener">{html.escape(l["label"])}</a>'
         for l in payload["links"]
     )
+    perfect_html = _perfect_section(payload.get("perfect"))
+    # Strip perfect blob from embedded JSON? Keep it — useful for clients.
     payload_json = html.escape(json.dumps(payload, ensure_ascii=False), quote=True)
+
+    hero_depart = (
+        payload["perfect"]["best"]["depart_label"]
+        if payload.get("perfect") and payload["perfect"].get("best")
+        else payload["best_departure"]["when"]
+    )
+    hero_arrive = (
+        f"Bužim ~{payload['perfect']['best']['arrive_buzim_short']}"
+        if payload.get("perfect") and payload["perfect"].get("best")
+        else "siehe Empfehlung"
+    )
 
     return f"""<!doctype html>
 <html lang="de">
@@ -256,7 +398,7 @@ def render_html(payload: dict) -> str:
       70% {{ box-shadow: 0 0 0 14px rgba(255,255,255,0); }}
       100% {{ box-shadow: 0 0 0 0 rgba(255,255,255,0); }}
     }}
-    .hint {{ margin: 10px 0 0; opacity: 0.92; font-size: 0.98rem; line-height: 1.4; max-width: 30ch; }}
+    .hint {{ margin: 10px 0 0; opacity: 0.92; font-size: 0.98rem; line-height: 1.4; max-width: 34ch; }}
     .metrics {{
       display: grid;
       grid-template-columns: 1.2fr 1fr;
@@ -287,6 +429,269 @@ def render_html(payload: dict) -> str:
       font-family: "Fraunces", Georgia, serif;
       font-size: 1.25rem; margin: 0 0 12px; letter-spacing: -0.02em;
     }}
+    h3 {{
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.05rem; margin: 18px 0 10px; letter-spacing: -0.02em;
+    }}
+
+    /* Perfect departure */
+    .perfect {{
+      padding: 0;
+      overflow: hidden;
+      border: 0;
+      background: transparent;
+    }}
+    .perfect-head {{
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+      margin-bottom: 10px; padding: 0 2px;
+    }}
+    .perfect-head h2 {{ margin: 0; }}
+    .perfect-stamp {{ color: var(--muted); font-size: 0.75rem; font-weight: 600; }}
+    .perfect-hero {{
+      position: relative;
+      border-radius: calc(var(--radius) + 4px);
+      padding: 22px 18px 18px;
+      color: #f8f4ea;
+      background:
+        radial-gradient(800px 280px at 90% -20%, rgba(245, 196, 110, 0.35), transparent 55%),
+        linear-gradient(160deg, #163a32 0%, #1f5c4a 48%, #8a5a12 120%);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      isolation: isolate;
+    }}
+    .perfect-hero::after {{
+      content: "";
+      position: absolute;
+      inset: auto -20% -40% 40%;
+      height: 180px;
+      background: radial-gradient(circle, rgba(255,255,255,0.12), transparent 65%);
+      animation: drift 8s ease-in-out infinite alternate;
+      z-index: -1;
+    }}
+    @keyframes drift {{
+      from {{ transform: translateX(0); }}
+      to {{ transform: translateX(-30px); }}
+    }}
+    .perfect-kicker {{
+      margin: 0;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }}
+    .perfect-time {{
+      margin: 6px 0 0;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(3.4rem, 16vw, 4.8rem);
+      line-height: 0.92;
+      letter-spacing: -0.04em;
+      font-weight: 700;
+      animation: rise 0.7s ease both;
+    }}
+    .perfect-day {{
+      margin: 8px 0 0;
+      font-weight: 700;
+      opacity: 0.92;
+    }}
+    .journey {{
+      list-style: none;
+      margin: 18px 0 0;
+      padding: 14px 12px;
+      display: grid;
+      grid-template-columns: 1fr 18px 1fr 18px 1fr;
+      gap: 6px;
+      align-items: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+    }}
+    .journey li {{ text-align: center; }}
+    .journey .j-label {{
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.75;
+    }}
+    .journey strong {{
+      display: block;
+      margin-top: 2px;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.35rem;
+    }}
+    .journey .j-sub {{
+      display: block;
+      margin-top: 2px;
+      font-size: 0.72rem;
+      opacity: 0.8;
+      line-height: 1.25;
+    }}
+    .j-line {{
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+      border-radius: 2px;
+      animation: shimmer 2.4s ease-in-out infinite;
+    }}
+    @keyframes shimmer {{
+      0%, 100% {{ opacity: 0.35; }}
+      50% {{ opacity: 1; }}
+    }}
+    .perfect-stats {{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }}
+    .perfect-stats div {{
+      background: rgba(0,0,0,0.15);
+      border-radius: 14px;
+      padding: 10px 8px;
+      text-align: center;
+    }}
+    .perfect-stats span {{ display: block; font-size: 0.7rem; opacity: 0.75; }}
+    .perfect-stats strong {{
+      display: block; margin-top: 3px;
+      font-family: "Fraunces", Georgia, serif; font-size: 1.05rem;
+    }}
+    .perfect-route {{
+      margin: 14px 0 0;
+      font-size: 0.86rem;
+      line-height: 1.4;
+      opacity: 0.9;
+    }}
+    .maps-btn {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 14px;
+      min-height: 48px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: #f4e4b8;
+      color: #17352d;
+      font-weight: 800;
+      text-decoration: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      transition: transform 0.2s ease;
+    }}
+    .maps-btn:hover {{ transform: translateY(-1px); }}
+    .maps-btn.ghost {{
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      box-shadow: none;
+      margin-top: 10px;
+    }}
+    .perfect-note {{
+      margin: 12px 0 0;
+      font-size: 0.75rem;
+      opacity: 0.78;
+      line-height: 1.35;
+    }}
+    .perfect-alt {{
+      margin-top: 12px;
+      background: var(--panel);
+      border: 1px solid rgba(215,199,161,0.65);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }}
+    .alt-kicker {{
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: 8px;
+    }}
+    .alt-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }}
+    .alt-grid span {{ display: block; color: var(--muted); font-size: 0.72rem; }}
+    .alt-grid strong {{
+      display: block; margin-top: 2px;
+      font-family: "Fraunces", Georgia, serif; font-size: 1.05rem;
+    }}
+    .perfect-timeline-wrap, .perfect-slots-wrap {{
+      margin-top: 12px;
+      background: var(--panel);
+      border: 1px solid rgba(215,199,161,0.65);
+      border-radius: var(--radius);
+      padding: 14px 16px 16px;
+    }}
+    .perfect-timeline-wrap h3, .perfect-slots-wrap h3 {{ margin-top: 0; }}
+    .timeline {{
+      list-style: none;
+      margin: 0;
+      padding: 4px 2px 8px;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(92px, 1fr);
+      gap: 8px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }}
+    .tl-item {{
+      scroll-snap-align: start;
+      background: #fffaf0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px 8px;
+      text-align: center;
+      min-height: 96px;
+      opacity: 0;
+      transform: translateY(8px);
+      animation: rise 0.5s ease forwards;
+    }}
+    .tl-item.best {{
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 2px rgba(31,107,87,0.18);
+      background: #e8f3ee;
+    }}
+    .tl-depart {{ display: block; font-weight: 800; font-size: 0.92rem; }}
+    .tl-bar {{
+      display: block;
+      height: 6px;
+      border-radius: 999px;
+      margin: 8px auto;
+      width: 70%;
+      background: #c8d9d1;
+    }}
+    .tl-item.load-frei .tl-bar {{ background: linear-gradient(90deg, #1f6b57, #6dffb0); }}
+    .tl-item.load-ok .tl-bar {{ background: linear-gradient(90deg, #c47a12, #f0c56d); }}
+    .tl-item.load-voll .tl-bar {{ background: linear-gradient(90deg, #b42318, #ff8f86); }}
+    .tl-meta {{ display: block; font-size: 0.68rem; color: var(--muted); line-height: 1.3; }}
+    .slot-list {{ list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }}
+    .slot-row {{
+      display: grid;
+      grid-template-columns: 72px 1fr 64px;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 8px;
+      border-bottom: 1px dashed var(--line);
+    }}
+    .slot-row:last-child {{ border-bottom: 0; }}
+    .slot-when strong, .slot-arrive strong {{
+      display: block;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.15rem;
+    }}
+    .slot-when span, .slot-arrive span, .slot-path span {{
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.3;
+    }}
+    .slot-arrive {{ text-align: right; }}
+    .perfect-empty {{
+      background: var(--panel);
+      border: 1px solid rgba(215,199,161,0.65);
+      border-radius: var(--radius);
+      padding: 16px;
+    }}
+
     .stops {{
       list-style: none; margin: 0; padding: 0;
       display: grid; gap: 0;
@@ -370,6 +775,12 @@ def render_html(payload: dict) -> str:
     .stops li:nth-child(5) {{ animation-delay: 0.25s; }}
     .stops li:nth-child(6) {{ animation-delay: 0.3s; }}
     .stops li:nth-child(7) {{ animation-delay: 0.35s; }}
+    .tl-item:nth-child(1) {{ animation-delay: 0.05s; }}
+    .tl-item:nth-child(2) {{ animation-delay: 0.1s; }}
+    .tl-item:nth-child(3) {{ animation-delay: 0.15s; }}
+    .tl-item:nth-child(4) {{ animation-delay: 0.2s; }}
+    .tl-item:nth-child(5) {{ animation-delay: 0.25s; }}
+    .tl-item:nth-child(6) {{ animation-delay: 0.3s; }}
     .alert:nth-child(1) {{ animation-delay: 0.08s; }}
     .alert:nth-child(2) {{ animation-delay: 0.14s; }}
     .alert:nth-child(3) {{ animation-delay: 0.2s; }}
@@ -379,8 +790,15 @@ def render_html(payload: dict) -> str:
       .wrap {{ padding-top: 28px; }}
       .metrics {{ grid-template-columns: 1.4fr 1fr 1fr; }}
     }}
+    @media (max-width: 420px) {{
+      .journey {{ grid-template-columns: 1fr; gap: 10px; }}
+      .j-line {{ height: 18px; width: 2px; margin: 0 auto; background: linear-gradient(180deg, transparent, rgba(255,255,255,0.7), transparent); }}
+      .slot-row {{ grid-template-columns: 64px 1fr 56px; }}
+    }}
     @media (prefers-reduced-motion: reduce) {{
-      .dot, .stops li, .alert {{ animation: none !important; opacity: 1; transform: none; }}
+      .dot, .stops li, .alert, .tl-item, .perfect-time, .perfect-hero::after, .j-line {{
+        animation: none !important; opacity: 1; transform: none;
+      }}
     }}
   </style>
 </head>
@@ -397,12 +815,12 @@ def render_html(payload: dict) -> str:
       <p class="hint">{html.escape(payload["status_hint"])}</p>
       <div class="metrics">
         <div class="metric">
-          <span>Beste Abfahrt</span>
-          <strong>{html.escape(payload["best_departure"]["when"])}</strong>
+          <span>Perfekte Abfahrt</span>
+          <strong>{html.escape(hero_depart)}</strong>
         </div>
         <div class="metric">
-          <span>Distanz</span>
-          <strong>~{payload["approx_km"]} km</strong>
+          <span>Ankunft</span>
+          <strong>{html.escape(hero_arrive)}</strong>
         </div>
         <div class="metric">
           <span>Live-Treffer</span>
@@ -410,6 +828,8 @@ def render_html(payload: dict) -> str:
         </div>
       </div>
     </header>
+
+    {perfect_html}
 
     <section aria-labelledby="route-title">
       <h2 id="route-title">Route</h2>
@@ -433,11 +853,10 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Auto-Refresh alle 15 Min über GitHub Actions · Daten ohne Gewähr</footer>
+    <footer>BuzimLine · Auto-Refresh alle 15 Min · Perfect-Abfahrt inkl. Google-Stau + Maljevac-Forecast</footer>
   </main>
   <script type="application/json" id="payload">{payload_json}</script>
   <script>
-    // Soft auto-reload so phones stay fresh when the tab is open
     const mins = 15;
     setTimeout(() => location.reload(), mins * 60 * 1000);
   </script>
@@ -474,10 +893,10 @@ def write_dashboard(
 ) -> Path:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    # Efficient single fetch
     config = load_config(config_path)
     alerts = fetch_all(config)
-    payload = _payload_from_alerts(config, alerts)
+    perfect = load_perfect_json(out / "perfect.json")
+    payload = _payload_from_alerts(config, alerts, perfect=perfect)
     html_path = out / "index.html"
     html_path.write_text(render_html(payload), encoding="utf-8")
     (out / "status.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
