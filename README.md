@@ -65,13 +65,27 @@ set -a && source .env && set +a
 traffic-monitor check --notify
 ```
 
-### Dauerhaft überwachen
+### Dauerhaft überwachen (PC)
 
 ```bash
 traffic-monitor watch --interval 300
 # oder
 docker compose up -d --build
 ```
+
+### In der Cloud ohne PC (GitHub Actions)
+
+Der Workflow `.github/workflows/traffic-monitor.yml` prüft **alle 15 Minuten** und schickt Telegram-Alerts — dein Rechner darf aus sein.
+
+1. Repo auf GitHub pushen (falls noch nicht geschehen)
+2. Im Repo: **Settings → Secrets and variables → Actions → New repository secret**
+   - `TELEGRAM_BOT_TOKEN` = Token vom BotFather
+   - `TELEGRAM_CHAT_ID` = deine Chat-ID
+   - optional: `NAKORDONI_API_KEY`
+3. **Actions** Tab → Workflow **Traffic Monitor** → **Run workflow** (erster Test)
+4. Danach läuft der Schedule automatisch weiter
+
+Hinweis: GitHub pausiert Schedules bei inaktiven Forks/Repos manchmal; bei Bedarf Workflow manuell triggern. Für die Fahrt reicht der 15‑Minuten-Cron völlig.
 
 ### Optional: Grenz-Wartezeiten API
 

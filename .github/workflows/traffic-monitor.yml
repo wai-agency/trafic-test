@@ -1,0 +1,83 @@
+name: Traffic Monitor
+
+on:
+  # Alle 15 Minuten (UTC). Für die Fahrt völlig ausreichend.
+  schedule:
+    - cron: "*/15 * * * *"
+  # Manuell: Actions → Traffic Monitor → Run workflow
+  workflow_dispatch:
+    inputs:
+      min_severity:
+        description: "Ab welcher Severity alerten"
+        required: false
+        default: warning
+        type: choice
+        options:
+          - warning
+          - critical
+          - info
+      force_notify:
+        description: "Status-Ping nach Telegram schicken"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: traffic-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Cache alert state
+        uses: actions/cache@v4
+        with:
+          path: .traffic_alert_state.json
+          key: traffic-alert-state-${{ github.run_id }}
+          restore-keys: |
+            traffic-alert-state-
+
+      - name: Run monitor
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NAKORDONI_API_KEY: ${{ secrets.NAKORDONI_API_KEY }}
+          MIN_SEVERITY: ${{ github.event.inputs.min_severity || 'warning' }}
+          FORCE_NOTIFY: ${{ github.event.inputs.force_notify || 'false' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN oder TELEGRAM_CHAT_ID fehlt in GitHub Secrets."
+            echo "Check läuft trotzdem (nur Log, keine Telegram-Nachricht)."
+            traffic-monitor check --min-severity "$MIN_SEVERITY" --console-only --state .traffic_alert_state.json
+          else
+            traffic-monitor check --min-severity "$MIN_SEVERITY" --notify --state .traffic_alert_state.json
+            if [ "$FORCE_NOTIFY" = "true" ]; then
+              python - <<'PY'
+          import os, httpx
+          token = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat = os.environ["TELEGRAM_CHAT_ID"]
+          text = "✅ Traffic Monitor Lauf OK (manueller Status-Ping)"
+          r = httpx.post(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              json={"chat_id": chat, "text": text},
+              timeout=20,
+          )
+          r.raise_for_status()
+          print("status ping sent")
+          PY
+            fi
+          fi
