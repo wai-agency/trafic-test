@@ -35,10 +35,12 @@ class TelegramNotifier(Notifier):
 
     def send(self, alert: Alert) -> None:
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+        # Preview an for Maps-Links, sonst aus
+        preview = "google.com/maps" in (alert.url or "") or "google.com/maps" in alert.detail
         payload = {
             "chat_id": self.chat_id,
             "text": alert.to_message(),
-            "disable_web_page_preview": True,
+            "disable_web_page_preview": not preview,
         }
         with httpx.Client(timeout=20.0) as client:
             resp = client.post(url, json=payload)

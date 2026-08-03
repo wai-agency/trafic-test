@@ -87,6 +87,13 @@ Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ei
 
 Dashboard: **https://wai-agency.github.io/trafic-test/**
 
+### Alternativrouten per Telegram
+Bei kritischem Stau (z. B. Karawanken oder lange Wartezeit Maljevac) schickt der Monitor
+automatisch eine **🧭 Alternative** mit **Google-Maps-Link**:
+- Karawanken/Tauern problematisch → Route über **Graz/Maribor**
+- Maljevac lange Schlange → Grenze **Izačić**
+- beides → Graz/Maribor + Izačić
+
 ### Dashboard lokal
 
 ```bash

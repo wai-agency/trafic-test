@@ -10,6 +10,7 @@ from rich.table import Table
 from traffic_monitor.config import load_config
 from traffic_monitor.models import Alert
 from traffic_monitor.notifiers import AlertState, Notifier, build_notifiers
+from traffic_monitor.reroute import build_reroute_alerts
 from traffic_monitor.sources import fetch_all
 
 console = Console()
@@ -25,14 +26,16 @@ def run_once(
 ) -> list[Alert]:
     config = load_config(config_path)
     alerts = fetch_all(config)
+    reroutes = build_reroute_alerts(alerts)
+    all_alerts = alerts + reroutes
     rank = {"info": 0, "warning": 1, "critical": 2}
     min_rank = rank.get(min_severity, 1)
-    actionable = [a for a in alerts if rank.get(a.severity, 0) >= min_rank]
+    actionable = [a for a in all_alerts if rank.get(a.severity, 0) >= min_rank]
 
-    _print_table(alerts)
+    _print_table(all_alerts)
 
     if not notify:
-        return alerts
+        return all_alerts
 
     notifier: Notifier = build_notifiers(console_only=console_only)
     state = AlertState(Path(state_path), cooldown_sec=int(config.get("cooldown_sec") or 1800))
@@ -44,8 +47,11 @@ def run_once(
         notifier.send(alert)
         state.mark_sent(alert, now_ts)
         sent += 1
-    console.print(f"[bold]Alerts gesendet:[/bold] {sent} / actionable {len(actionable)} / total {len(alerts)}")
-    return alerts
+    console.print(
+        f"[bold]Alerts gesendet:[/bold] {sent} / actionable {len(actionable)} / "
+        f"total {len(all_alerts)} (davon {len(reroutes)} Alternativrouten)"
+    )
+    return all_alerts
 
 
 def watch(
