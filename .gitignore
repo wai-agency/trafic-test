@@ -11,4 +11,5 @@ dist/
 build/
 data/
 .traffic_alert_state.json
+site/
 .DS_Store

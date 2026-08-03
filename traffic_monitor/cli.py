@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from traffic_monitor import __version__
+from traffic_monitor.dashboard import serve_dashboard, write_dashboard
 from traffic_monitor.monitor import run_once, watch
 from traffic_monitor.recommend import print_travel_plan
 
@@ -41,11 +42,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("recommend", help="Beste Abfahrt + Route + Checkliste anzeigen")
 
-    # Convenience top-level aliases via examples in help
+    dash = sub.add_parser("dashboard", help="Mobiles HTML-Dashboard erzeugen")
+    dash.add_argument("--out", default="site", help="Ausgabeordner (default: site)")
+    dash.add_argument("--config", default=None)
+    dash.add_argument("--serve", action="store_true", help="Lokalen Server starten")
+    dash.add_argument("--host", default="0.0.0.0")
+    dash.add_argument("--port", type=int, default=8080)
+
     parser.epilog = """Examples:
   traffic-monitor recommend
-  traffic-monitor check
   traffic-monitor check --notify
+  traffic-monitor dashboard --out site
+  traffic-monitor dashboard --serve
   traffic-monitor watch --interval 300
 """
     return parser
@@ -77,6 +85,12 @@ def main(argv: list[str] | None = None) -> int:
             console_only=args.console_only,
             state_path=args.state,
         )
+        return 0
+
+    if args.command == "dashboard":
+        write_dashboard(args.out, args.config)
+        if args.serve:
+            serve_dashboard(args.out, host=args.host, port=args.port)
         return 0
 
     parser.print_help()

@@ -1,10 +1,8 @@
 name: Traffic Monitor
 
 on:
-  # Alle 15 Minuten (UTC). Für die Fahrt völlig ausreichend.
   schedule:
     - cron: "*/15 * * * *"
-  # Manuell: Actions → Traffic Monitor → Run workflow
   workflow_dispatch:
     inputs:
       min_severity:
@@ -26,10 +24,18 @@ concurrency:
   group: traffic-monitor
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +67,6 @@ jobs:
           set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
             echo "::warning::TELEGRAM_BOT_TOKEN oder TELEGRAM_CHAT_ID fehlt in GitHub Secrets."
-            echo "Check läuft trotzdem (nur Log, keine Telegram-Nachricht)."
             traffic-monitor check --min-severity "$MIN_SEVERITY" --console-only --state .traffic_alert_state.json
           else
             traffic-monitor check --min-severity "$MIN_SEVERITY" --notify --state .traffic_alert_state.json
@@ -81,3 +86,18 @@ jobs:
           PY
             fi
           fi
+
+      - name: Build mobile dashboard
+        run: traffic-monitor dashboard --out site
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

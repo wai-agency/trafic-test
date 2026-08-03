@@ -73,19 +73,26 @@ traffic-monitor watch --interval 300
 docker compose up -d --build
 ```
 
-### In der Cloud ohne PC (GitHub Actions)
+### In der Cloud ohne PC (GitHub Actions + mobiles Dashboard)
 
-Der Workflow `.github/workflows/traffic-monitor.yml` prüft **alle 15 Minuten** und schickt Telegram-Alerts — dein Rechner darf aus sein.
+Der Workflow prüft **alle 15 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages.
 
-1. Repo auf GitHub pushen (falls noch nicht geschehen)
-2. Im Repo: **Settings → Secrets and variables → Actions → New repository secret**
-   - `TELEGRAM_BOT_TOKEN` = Token vom BotFather
-   - `TELEGRAM_CHAT_ID` = deine Chat-ID
+1. PR mergen / Branch pushen
+2. **Settings → Pages → Build and deployment → Source: GitHub Actions**
+3. **Settings → Secrets and variables → Actions**
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_CHAT_ID`
    - optional: `NAKORDONI_API_KEY`
-3. **Actions** Tab → Workflow **Traffic Monitor** → **Run workflow** (erster Test)
-4. Danach läuft der Schedule automatisch weiter
+4. **Actions → Traffic Monitor → Run workflow**
+5. Dashboard-URL danach unter **Settings → Pages** (meist `https://<user>.github.io/<repo>/`)
 
-Hinweis: GitHub pausiert Schedules bei inaktiven Forks/Repos manchmal; bei Bedarf Workflow manuell triggern. Für die Fahrt reicht der 15‑Minuten-Cron völlig.
+### Dashboard lokal
+
+```bash
+traffic-monitor dashboard --out site
+traffic-monitor dashboard --serve --port 8080
+# Handy im gleichen WLAN: http://<deine-pc-ip>:8080
+```
 
 ### Optional: Grenz-Wartezeiten API
 
