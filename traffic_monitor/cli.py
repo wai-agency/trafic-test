@@ -61,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     perf.add_argument("--notify", action="store_true")
     perf.add_argument("--console-only", action="store_true")
+    perf.add_argument(
+        "--out",
+        default=None,
+        help="Perfect-JSON fürs Dashboard schreiben (z.B. site/perfect.json)",
+    )
 
     parser.epilog = """Examples:
   traffic-monitor perfect --notify
@@ -110,7 +115,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "perfect":
-        perfect_depart(notify=args.notify or args.console_only, console_only=args.console_only)
+        perfect_depart(
+            notify=args.notify or args.console_only,
+            console_only=args.console_only,
+            out=args.out,
+        )
         return 0
 
     parser.print_help()

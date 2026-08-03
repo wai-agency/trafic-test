@@ -1,10 +1,10 @@
 # Watchpoints for Stuttgart → Bužim (via Karawanken + Maljevac)
 route:
-  from: Stuttgart
+  from: Waiblingen
   to: Bužim
-  via: "A8 → Salzburg → A10 Tauern → Villach → A11 Karawanken → SI-A2 → Zagreb → Maljevac → Velika Kladuša → Bužim"
-  approx_km: 930
-  free_flow_hours: 11
+  via: "Waiblingen → A8 → Salzburg → A10 Tauern → Villach → A11 Karawanken → SI-A2 → Zagreb → Maljevac → Velika Kladuša → Bužim"
+  approx_km: 960
+  free_flow_hours: 11.5
 
 # Keywords matched against ASFINAG / GPMaljevac / Promet texts
 keywords:
