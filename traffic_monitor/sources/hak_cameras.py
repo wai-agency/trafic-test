@@ -29,7 +29,7 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing changes so CI cache is not reused.
-_PROMPT_VERSION = 5
+_PROMPT_VERSION = 6
 
 _PROMPT = (
     "Du bist ein Verkehrsanalyst fuer eine Live-Grenzkamera (Kroatien/Bosnien, oft Maljevac). "
@@ -44,24 +44,32 @@ _PROMPT = (
     "und gehoert NICHT in vehicles.\n"
     "• LKW: Feld trucks, nicht in vehicles.\n"
     "• Zaehle in der aktiven Spur auch kleine/unscharfe Autos hinten — aber nur in "
-    "dieser Spur.\n"
-    "• queue_end_visible=true wenn Grenzkabine/Schranke oder letztes Auto der Spur "
-    "sichtbar ist. false nur wenn die Spur klar am Bildrand abgeschnitten ist.\n"
-    "• Bei false: vehicles nur leicht erhoehen (+20–40%), nicht verdoppeln.\n\n"
+    "dieser Spur.\n\n"
+    "Kolonnenende (sehr wichtig):\n"
+    "• queue_end_visible=true nur wenn du klar das letzte Auto ODER Kabine/Schranke "
+    "als Ende der Warteschlange siehst.\n"
+    "• queue_end_visible=false wenn die Spur am Bildrand/Huegel abgeschnitten ist, "
+    "Autos immer noch dichter werden, oder du unsicher bist ob noch mehr kommt.\n"
+    "• Wenn queue_end_visible=false → IMMER vom SCHLIMMSTEN ausgehen: "
+    "severity=critical, road=dicht, wait_min hoch (mindestens 45–60+), "
+    "vehicles = sichtbare Spur + deutliche Aufschlagschaetzung (oft mind. 2x der "
+    "sichtbaren Autos, aber Parkplaetze weiterhin NICHT mitzaehlen). "
+    "Summary muss sagen: Ende nicht sichtbar, langer Stau angenommen.\n\n"
     "Antworte AUSSCHLIESSLICH mit kompaktem JSON:\n"
     "{"
-    "\"vehicles\": <int nur aktive Einfahrtspur>, "
+    "\"vehicles\": <int nur aktive Einfahrtspur (ggf. Worst-Case-Schaetzung)>, "
     "\"trucks\": <int LKW in/neben der Spur>, "
     "\"wait_min\": <int Minuten>, "
     "\"queue_end_visible\": <true|false>, "
-    "\"parked_ignored\": <int geschaetzte parkende Autos die du bewusst NICHT gezaehlt hast>, "
+    "\"parked_ignored\": <int parkende Autos bewusst NICHT gezaehlt>, "
     "\"severity\": \"clear\"|\"warning\"|\"critical\", "
     "\"weather\": \"sunny|cloudy|rain|fog|night|unknown\", "
     "\"road\": \"frei|flüssig|stockend|dicht|gesperrt|unbekannt\", "
-    "\"summary\": \"<kurz deutsch; erwaehne dass Parkplaetze nicht gezaehlt wurden wenn relevant>\" "
+    "\"summary\": \"<kurz deutsch>\" "
     "}.\n"
-    "Richtwerte: unter 5 + Ende sichtbar = clear; 5-20 = warning; ueber 20 = critical. "
-    "Wartezeit ~1.5–2.5 min pro Auto in der aktiven Spur."
+    "Wenn Ende sichtbar: unter 5 = clear; 5-20 = warning; ueber 20 = critical; "
+    "Wartezeit ~2–3 min pro Auto in der Spur. "
+    "Wenn Ende NICHT sichtbar: immer critical / langer Stau (Worst Case)."
 )
 
 
@@ -422,28 +430,22 @@ def normalize_verdict(text: str | dict) -> dict | None:
         end_visible = bool(raw_end) if raw_end is not None else True
     out["queue_end_visible"] = end_visible
 
-    # Safety floor: if the queue continues beyond the frame, never treat as "frei"
+    # Worst case when queue end is cut off / unclear
     cars = out.get("vehicles") or 0
     if not end_visible and cars > 0:
-        if _SEV_RANK.get(out["severity"], 0) < _SEV_RANK["warning"]:
-            out["severity"] = "warning"
-        wait = out.get("wait_min")
-        # Mild bump only — do not invent a huge queue from a short visible line
-        floor = max(15, min(35, int(cars * 2)))
-        if wait is None or wait < floor:
-            out["wait_min"] = floor
-        if out.get("road") in ("frei", "flüssig", "unbekannt"):
-            out["road"] = "stockend"
+        out["severity"] = "critical"
+        out["road"] = "dicht"
+        # Assume longer queue than visible (still lane-only, not parking)
+        estimated = max(cars * 2, cars + 15)
+        if out.get("vehicles") is None or out["vehicles"] < estimated:
+            out["vehicles"] = estimated
+        wait_floor = max(60, estimated * 3)
+        if out.get("wait_min") is None or out["wait_min"] < wait_floor:
+            out["wait_min"] = wait_floor
         summary = out.get("summary") or ""
-        if "ende" not in summary.lower():
-            out["summary"] = (
-                (summary + " " if summary else "")
-                + "Kolonnenende nicht sichtbar."
-            ).strip()
-        if cars >= 25 and _SEV_RANK.get(out["severity"], 0) < _SEV_RANK["critical"]:
-            out["severity"] = "critical"
-            if (out.get("wait_min") or 0) < 40:
-                out["wait_min"] = 40
+        note = "Ende nicht sichtbar — Worst Case: langer Stau angenommen."
+        if "worst" not in summary.lower() and "ende nicht" not in summary.lower():
+            out["summary"] = f"{summary} {note}".strip() if summary else note
 
     return out
 

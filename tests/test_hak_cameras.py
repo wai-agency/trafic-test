@@ -61,11 +61,11 @@ def test_queue_end_not_visible_raises_floor():
         )
     )
     assert v["queue_end_visible"] is False
-    assert v["severity"] == "warning"
-    assert v["wait_min"] >= 15
-    assert v["vehicles"] == 8  # do not invent extra cars in post-process
-    assert v["road"] == "stockend"
-    assert "ende" in v["summary"].lower()
+    assert v["severity"] == "critical"
+    assert v["road"] == "dicht"
+    assert v["vehicles"] >= 16  # at least ~2x visible (worst case)
+    assert v["wait_min"] >= 60
+    assert "ende" in v["summary"].lower() or "worst" in v["summary"].lower() or "stau" in v["summary"].lower()
 
 
 def test_queue_end_not_visible_many_cars_critical():
@@ -80,8 +80,8 @@ def test_queue_end_not_visible_many_cars_critical():
         }
     )
     assert v["severity"] == "critical"
-    assert v["wait_min"] >= 40
-    assert v["vehicles"] == 28
+    assert v["vehicles"] >= 43  # 28*2 or 28+15
+    assert v["wait_min"] >= 60
 
 
 def test_queue_end_visible_keeps_modest_count():
@@ -106,7 +106,8 @@ def test_queue_end_visible_keeps_modest_count():
 def test_prompt_forbids_parking_lot_count():
     assert "Parkplaetze" in hc._PROMPT or "parkende" in hc._PROMPT.lower() or "Parkplatz" in hc._PROMPT
     assert "Einfahrt" in hc._PROMPT or "aktive Spur" in hc._PROMPT or "Einfahrtspur" in hc._PROMPT
-    assert hc._PROMPT_VERSION >= 5
+    assert "SCHLIMMSTEN" in hc._PROMPT or "Worst" in hc._PROMPT or "schlimmsten" in hc._PROMPT.lower()
+    assert hc._PROMPT_VERSION >= 6
 
 
 def test_parse_openai_fenced_json():
