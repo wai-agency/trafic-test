@@ -254,7 +254,6 @@ def build_live_reroute_alerts(alerts: list[Alert]) -> list[Alert]:
         f"Distanz: ~{best.distance_m/1000:.0f} km",
         f"{best.summary_via}",
         f"Google Maps: {best.maps_url()}",
-        f"Google Maps (Namen): {best.route.google_maps_search_url()}",
     ]
     if len(ranked) > 1:
         lines.append("")

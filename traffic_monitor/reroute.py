@@ -27,14 +27,28 @@ class RouteOption:
     labels: tuple[str, ...]
 
     def google_maps_url(self) -> str:
-        # Google Maps directions with coordinates
+        """City-name directions URL (avoids random POIs from raw coordinates)."""
+        origin = quote(self.labels[0])
+        destination = quote(self.labels[-1])
+        mid = self.labels[1:-1]
+        if mid:
+            waypoints = quote("|".join(mid), safe="|")
+            return (
+                "https://www.google.com/maps/dir/?api=1"
+                f"&origin={origin}"
+                f"&destination={destination}"
+                f"&waypoints={waypoints}"
+                "&travelmode=driving"
+            )
+        return (
+            "https://www.google.com/maps/dir/?api=1"
+            f"&origin={origin}&destination={destination}&travelmode=driving"
+        )
+
+    def google_maps_coord_url(self) -> str:
+        # Coordinates only as fallback; Google often snaps these to nearby POIs
         path = "/".join(f"{lat},{lon}" for lat, lon in self.points)
         return f"https://www.google.com/maps/dir/{path}"
-
-    def google_maps_search_url(self) -> str:
-        # Named waypoints (often nicer in the app)
-        names = "/".join(quote(label) for label in self.labels)
-        return f"https://www.google.com/maps/dir/{names}"
 
 
 ROUTES: dict[str, RouteOption] = {
@@ -43,28 +57,58 @@ ROUTES: dict[str, RouteOption] = {
         title="Hauptroute (Karawanken + Maljevac)",
         summary="A8 → Salzburg → Tauern → Karawanken → Zagreb → Maljevac → Bužim",
         points=(STUTTGART, SALZBURG, VILLACH, ZAGREB, MALJEVAC, BUZIM),
-        labels=("Stuttgart", "Salzburg", "Villach", "Zagreb", "Maljevac", "Bužim"),
+        labels=(
+            "Stuttgart, Germany",
+            "Salzburg, Austria",
+            "Villach, Austria",
+            "Zagreb, Croatia",
+            "Maljevac, Croatia",
+            "Bužim, Bosnia and Herzegovina",
+        ),
     ),
     "via_graz": RouteOption(
         id="via_graz",
         title="Umleitung ohne Karawanken (Graz/Maribor)",
         summary="A8 → München → Graz → Maribor (Šentilj) → Zagreb → Maljevac → Bužim",
         points=(STUTTGART, MUENCHEN, GRAZ, MARIBOR, ZAGREB, MALJEVAC, BUZIM),
-        labels=("Stuttgart", "München", "Graz", "Maribor", "Zagreb", "Maljevac", "Bužim"),
+        labels=(
+            "Stuttgart, Germany",
+            "Munich, Germany",
+            "Graz, Austria",
+            "Maribor, Slovenia",
+            "Zagreb, Croatia",
+            "Maljevac, Croatia",
+            "Bužim, Bosnia and Herzegovina",
+        ),
     ),
     "border_izacic": RouteOption(
         id="border_izacic",
         title="Gleiche Autobahn, Grenze Izačić",
         summary="Karawanken-Korridor, Einreise über Izačić statt Maljevac",
         points=(STUTTGART, SALZBURG, VILLACH, ZAGREB, IZACIC, BUZIM),
-        labels=("Stuttgart", "Salzburg", "Villach", "Zagreb", "Izačić", "Bužim"),
+        labels=(
+            "Stuttgart, Germany",
+            "Salzburg, Austria",
+            "Villach, Austria",
+            "Zagreb, Croatia",
+            "Izačić, Bosnia and Herzegovina",
+            "Bužim, Bosnia and Herzegovina",
+        ),
     ),
     "via_graz_izacic": RouteOption(
         id="via_graz_izacic",
         title="Ohne Karawanken + Grenze Izačić",
         summary="Graz/Maribor und Einreise Izačić (bei Bihać)",
         points=(STUTTGART, MUENCHEN, GRAZ, MARIBOR, ZAGREB, IZACIC, BUZIM),
-        labels=("Stuttgart", "München", "Graz", "Maribor", "Zagreb", "Izačić", "Bužim"),
+        labels=(
+            "Stuttgart, Germany",
+            "Munich, Germany",
+            "Graz, Austria",
+            "Maribor, Slovenia",
+            "Zagreb, Croatia",
+            "Izačić, Bosnia and Herzegovina",
+            "Bužim, Bosnia and Herzegovina",
+        ),
     ),
 }
 
@@ -160,12 +204,10 @@ def build_reroute_alerts(alerts: list[Alert]) -> list[Alert]:
     out: list[Alert] = []
     for route in routes:
         maps = route.google_maps_url()
-        maps_named = route.google_maps_search_url()
         detail = (
             f"Grund: {reason}\n"
             f"{route.summary}\n"
-            f"Google Maps: {maps}\n"
-            f"Google Maps (Namen): {maps_named}"
+            f"Google Maps: {maps}"
         )
         out.append(
             Alert(
