@@ -280,7 +280,7 @@ def build_live_reroute_alerts(alerts: list[Alert]) -> list[Alert]:
             severity="critical",
             title=f"🧭 Live-Route: {best.route.title} ({best.format_duration()})",
             detail="\n".join(lines),
-            location="Stuttgart → Bužim",
+            location="Bužim → Waiblingen",
             url=best.maps_url(),
             event_id=f"liveroute:{best.route.id}:{bucket}:{blockers}",
             delay_min=best.total_sec // 60,

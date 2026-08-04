@@ -12,7 +12,6 @@ from rich.panel import Panel
 from rich.table import Table
 
 from traffic_monitor.config import env
-from traffic_monitor.depart import WAIBLINGEN, with_origin
 from traffic_monitor.models import Alert
 from traffic_monitor.notifiers import build_notifiers
 from traffic_monitor.reroute import ROUTES, RouteOption
@@ -72,6 +71,25 @@ def _cars_to_wait_min(cars: float) -> int:
     return max(10, int(round(cars * 8)))
 
 
+def _border_waypoint_index(route: RouteOption) -> int:
+    """Index of Maljevac/Izačić in route.points (arrival = sum of legs[:index])."""
+    for i, label in enumerate(route.labels):
+        low = label.lower()
+        if "maljevac" in low or "izači" in low or "izaci" in low:
+            return i
+    # Fallback: early border on return trips, late border on outbound templates
+    return 1 if len(route.points) > 2 else max(len(route.points) - 2, 0)
+
+
+def _drive_to_border(secs: list[int], route: RouteOption) -> int:
+    idx = _border_waypoint_index(route)
+    if not secs:
+        return 0
+    if idx <= 0:
+        return 0
+    return sum(secs[: min(idx, len(secs))])
+
+
 def google_leg_times(
     route: RouteOption,
     depart_at: datetime,
@@ -79,7 +97,7 @@ def google_leg_times(
 ) -> tuple[int, int, int] | None:
     """
     Returns (drive_sec_to_border, drive_sec_total, distance_m)
-    Border = second-to-last waypoint (Maljevac/Izačić).
+    Border = Maljevac/Izačić waypoint (early on Bužim→Waiblingen return).
     """
     origin = f"{route.points[0][0]},{route.points[0][1]}"
     destination = f"{route.points[-1][0]},{route.points[-1][1]}"
@@ -116,9 +134,7 @@ def google_leg_times(
     secs = [leg_sec(leg) for leg in legs]
     dist = sum(int((leg.get("distance") or {}).get("value") or 0) for leg in legs)
     total = sum(secs)
-    # Border is end of penultimate leg (arrival at Maljevac/Izačić waypoint)
-    to_border = sum(secs[:-1]) if len(secs) >= 2 else total
-    return to_border, total, dist
+    return _drive_to_border(secs, route), total, dist
 
 
 def osrm_leg_times(route: RouteOption) -> tuple[int, int, int] | None:
@@ -138,17 +154,15 @@ def osrm_leg_times(route: RouteOption) -> tuple[int, int, int] | None:
     secs = [int(leg["duration"]) for leg in legs]
     dist = int(routes[0]["distance"])
     total = sum(secs)
-    to_border = sum(secs[:-1]) if len(secs) >= 2 else total
-    return to_border, total, dist
+    return _drive_to_border(secs, route), total, dist
 
 
 def candidate_routes() -> list[RouteOption]:
-    origin = "Waiblingen, Germany"
     return [
-        with_origin(ROUTES["primary"], WAIBLINGEN, origin),
-        with_origin(ROUTES["via_graz"], WAIBLINGEN, origin),
-        with_origin(ROUTES["border_izacic"], WAIBLINGEN, origin),
-        with_origin(ROUTES["via_graz_izacic"], WAIBLINGEN, origin),
+        ROUTES["primary"],
+        ROUTES["via_graz"],
+        ROUTES["border_izacic"],
+        ROUTES["via_graz_izacic"],
     ]
 
 
@@ -376,8 +390,8 @@ def compute_perfect_payload() -> dict:
         "generated_at": now.isoformat(),
         "generated_label": now.strftime("%d.%m.%Y %H:%M"),
         "refresh_minutes": 30,
-        "origin": "Waiblingen",
-        "destination": "Bužim",
+        "origin": "Bužim",
+        "destination": "Waiblingen",
         "provider": best.provider,
         "slot_count": len(primary),
         "best": _slot_dict(best, badge="früheste Ankunft"),
@@ -389,8 +403,8 @@ def compute_perfect_payload() -> dict:
         "top": [_slot_dict(s) for s in scored[:10]],
         "timeline": timeline,
         "hint": (
-            "Google Live-Stau + Nakordoni Maljevac-Forecast (+ HAK-Cam KI wenn Ankunft nah). "
-            "Abfahrtsfenster inkl. 00–05; Update alle ~30 Min. "
+            "Rückfahrt Bužim → Waiblingen · Google Live-Stau + Nakordoni Maljevac-Forecast "
+            "(+ HAK-Cam KI wenn Grenze nah). Abfahrtsfenster inkl. 00–05. "
             "Verpasste Abfahrt → automatisch nächste beste."
         ),
     }
@@ -548,11 +562,11 @@ def optimize(
     best = payload["best"]
     best_low = payload.get("best_low_border")
 
-    table = Table(title="Top Abfahrten Waiblingen → Bužim (komplett)")
+    table = Table(title="Top Abfahrten Bužim → Waiblingen (komplett)")
     table.add_column("Los")
     table.add_column("An Grenze")
     table.add_column("Grenze")
-    table.add_column("An Bužim")
+    table.add_column("An Waiblingen")
     table.add_column("Route")
     table.add_column("Total")
     for s in payload["top"]:
@@ -568,16 +582,16 @@ def optimize(
 
     lines = [
         f"Stand: {payload['generated_label']} Europe/Berlin",
-        "Ziel: schnell ankommen + wenig Stau + kurze Grenze Maljevac/BiH",
+        "Ziel: schnell ankommen + wenig Stau + kurze Grenze Maljevac (BiH→HR)",
         f"Routing: {payload['provider']}",
         "",
-        "🏆 EMPFEHLUNG (früheste Ankunft Bužim):",
+        "🏆 EMPFEHLUNG (früheste Ankunft Waiblingen):",
         f"Los: {best['depart_label']}",
         f"Route: {best['route_title']}",
         f"{best['route_summary']}",
         f"An Grenze ca.: {best['arrive_border_label']}",
         f"Grenzwartezeit ca.: {best['border_wait_min']} min ({best['notes']})",
-        f"An Bužim ca.: {best['arrive_buzim_label']}",
+        f"An Waiblingen ca.: {best['arrive_buzim_label']}",
         f"Gesamt: {best['total_label']} | ~{best['distance_km']} km",
         f"Maps: {best['maps_url']}",
     ]
@@ -589,12 +603,12 @@ def optimize(
             f"Route: {best_low['route_title']}",
             f"An Grenze ca.: {best_low['arrive_border_label']}",
             f"Grenze ca.: {best_low['border_wait_min']} min / {best_low['border_cars']} Autos",
-            f"An Bužim ca.: {best_low['arrive_buzim_label']}",
+            f"An Waiblingen ca.: {best_low['arrive_buzim_label']}",
             f"Maps: {best_low['maps_url']}",
         ]
     lines += ["", f"Hinweis: {payload['hint']}"]
     text = "\n".join(lines)
-    console.print(Panel(text, title="Perfekte Abfahrt", border_style="green"))
+    console.print(Panel(text, title="Perfekte Abfahrt (Rückfahrt)", border_style="green"))
 
     if out:
         write_perfect_json(out, payload)
@@ -605,11 +619,11 @@ def optimize(
             source="PerfectDepart",
             severity="critical",
             title=(
-                f"🚗 Perfekte Abfahrt: {best['depart_short']} → "
-                f"Bužim ~{best['arrive_buzim_short']}"
+                f"🚗 Perfekte Rückfahrt: {best['depart_short']} → "
+                f"Waiblingen ~{best['arrive_buzim_short']}"
             ),
             detail=text,
-            location="Waiblingen → Bužim",
+            location="Bužim → Waiblingen",
             url=best["maps_url"],
             event_id=f"perfect:{best['depart']}:{best['route_id']}",
         )

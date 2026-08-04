@@ -9,8 +9,8 @@ def _base_payload(**overrides):
         "generated_label": "03.08.2026 08:00",
         "tz": "Europe/Berlin",
         "brand": "BuzimLine",
-        "from": "Waiblingen",
-        "to": "Bužim",
+        "from": "Bužim",
+        "to": "Waiblingen",
         "via": "Karawanken",
         "approx_km": 960,
         "status": "warning",
@@ -49,7 +49,7 @@ def _base_payload(**overrides):
             },
         },
         "borders": [{"name": "Maljevac", "cars": 10, "wait_min": 15, "stale": False}],
-        "stops": [("Waiblingen", "Start"), ("Bužim", "Ziel")],
+        "stops": [("Bužim", "Start"), ("Waiblingen", "Ziel")],
         "alerts": [
             {
                 "severity": "warning",
@@ -80,10 +80,10 @@ def test_render_html_contains_brand_and_status():
     assert 'data-generated-at="2026-08-03T08:00:00+02:00"' in html
     assert "Daten veraltet" in html
     assert "Maljevac jetzt" in html
-    assert "Einfahrt BiH (HR → BiH)" in html
-    assert "Einfahrt HR (BiH → HR)" in html
-    assert "Einfahrt BiH" in html
-    assert "Einfahrt HR" in html
+    assert "Eure Richtung (BiH → HR)" in html
+    assert "Gegenrichtung (HR → BiH)" in html
+    assert "Ausreise HR (eure Richtung)" in html
+    assert "Gegenrichtung BiH" in html
     assert ">10<" in html or "10 Autos" in html
     assert ">4<" in html or "4 Autos" in html
     assert "HAK-Cam" in html
@@ -155,15 +155,15 @@ def test_render_html_perfect_block():
             "distance_km": 963,
             "route_id": "primary",
             "route_title": "Hauptroute",
-            "route_summary": "Waiblingen → Maljevac → Bužim",
-            "maps_url": "https://www.google.com/maps/dir/?api=1&origin=Waiblingen",
+            "route_summary": "Bužim → Maljevac → Waiblingen",
+            "maps_url": "https://www.google.com/maps/dir/?api=1&origin=Bu%C5%BEim",
             "stops": [
-                "Waiblingen, Germany",
-                "Salzburg, Austria",
-                "Villach, Austria",
-                "Zagreb, Croatia",
-                "Maljevac, Croatia",
                 "Bužim, Bosnia and Herzegovina",
+                "Maljevac, Croatia",
+                "Zagreb, Croatia",
+                "Villach, Austria",
+                "Salzburg, Austria",
+                "Waiblingen, Germany",
             ],
             "notes": "Forecast",
         },

@@ -35,13 +35,13 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing / model cadence / image source changes.
-_PROMPT_VERSION = 17
+_PROMPT_VERSION = 18
 
 # Reuse OpenAI vision results ~20 min so scheduled runs do not re-upload JPEGs every cycle.
 _CACHE_TTL_SEC = 20 * 60
 
 _PROMPT = (
-    "Du hilfst Autofahrern bei der Reiseplanung (Strecke Waiblingen → Bužim). "
+    "Du hilfst Autofahrern bei der Reiseplanung (Rueckfahrt Bužim → Waiblingen). "
     "Vor dir ist ein oeffentliches Live-Bild einer Strassenkamera an einem Grenzubergang. "
     "Schätze die Warteschlange NUR in der genannten Fahrtrichtung.\n\n"
     "Zaehlmethode:\n"
@@ -338,15 +338,20 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
 
 
 def maljevac_cam_wait_min(alerts: list[Alert]) -> int | None:
-    """Best live wait estimate from HAK cameras for Maljevac HR→BiH."""
+    """Best live wait estimate from HAK cameras for Maljevac BiH→HR (return)."""
     waits: list[int] = []
     for alert in alerts:
         if alert.source != "HAK-Cam" or alert.delay_min is None:
             continue
+        role = str(alert.extras.get("role") or "").lower()
         blob = f"{alert.title} {alert.location} {alert.extras.get('direction', '')}".lower()
-        if "maljevac" in blob and ("hr" in blob and "bih" in blob or "ausreise" in blob or "hr->" in blob):
+        # Prefer return direction BiH → HR
+        if role == "to_hr" or (
+            "maljevac" in blob
+            and ("bih->hr" in blob or "bih → hr" in blob or "einreise" in blob)
+        ):
             waits.append(int(alert.delay_min))
-        elif "maljevac" in blob and alert.extras.get("relevant"):
+        elif "maljevac" in blob and alert.extras.get("relevant") and role != "to_bih":
             waits.append(int(alert.delay_min))
     if not waits:
         for alert in alerts:

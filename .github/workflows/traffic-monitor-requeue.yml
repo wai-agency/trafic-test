@@ -1,9 +1,9 @@
 # Keeps Traffic Monitor refreshing ~every 20 minutes even when GitHub's
 # schedule cron skips/delays for hours.
 #
-# After each successful Traffic Monitor run on main, wait ~19 min and
-# dispatch the next run via workflow_dispatch (allowed with GITHUB_TOKEN).
-# Set repository variable MONITOR_KEEPALIVE=false to stop the loop.
+# OPT-IN: only runs when repository variable MONITOR_KEEPALIVE=true
+# and .github/MONITOR_PAUSED is absent on the triggering commit.
+# Set MONITOR_KEEPALIVE=false (or leave unset) to stop the loop.
 name: Traffic Monitor Requeue
 
 on:
@@ -24,20 +24,36 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.head_branch == 'main'
-      && vars.MONITOR_KEEPALIVE != 'false'
+      && vars.MONITOR_KEEPALIVE == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Checkout pause flag
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: |
+            .github/MONITOR_PAUSED
+          sparse-checkout-cone-mode: false
+
       - name: Wait ~19 min then dispatch next monitor
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -f .github/MONITOR_PAUSED ]; then
+            echo "MONITOR_PAUSED present — not requeueing (save API costs)."
+            exit 0
+          fi
           WAIT_SEC=1140
           echo "Last Traffic Monitor succeeded. Sleeping ${WAIT_SEC}s before next dispatch…"
           sleep "${WAIT_SEC}"
 
-          # Avoid pile-ups if a schedule/push already started a run.
+          if [ -f .github/MONITOR_PAUSED ]; then
+            echo "MONITOR_PAUSED appeared during wait — abort dispatch."
+            exit 0
+          fi
+
           in_progress="$(gh run list --repo "${{ github.repository }}" \
             --workflow "Traffic Monitor" --status in_progress \
             --json databaseId --jq 'length')"
@@ -46,7 +62,7 @@ jobs:
             --json databaseId --jq 'length')"
           echo "Traffic Monitor in_progress=${in_progress} queued=${queued}"
           if [ "${in_progress}" != "0" ] || [ "${queued}" != "0" ]; then
-            echo "Skip dispatch — a Traffic Monitor run is already active/queued (its requeue will continue the loop)."
+            echo "Skip dispatch — a Traffic Monitor run is already active/queued."
             exit 0
           fi
 

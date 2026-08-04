@@ -1,14 +1,14 @@
 # Regular refreshes: cron is best-effort; traffic-monitor-requeue.yml chains the
-# next run ~19 min after each success on main (disable via MONITOR_KEEPALIVE=false).
+# next run ~19 min after each success on main (only if MONITOR_KEEPALIVE=true).
+#
+# PAUSE: if .github/MONITOR_PAUSED exists, skip live API work (no OpenAI/Google
+# burn). Dashboard HTML can still be rebuilt from cache on push.
 name: Traffic Monitor
 
 on:
   push:
     branches: [main]
-  schedule:
-    # Backup cadence if the requeue loop is ever interrupted.
-    - cron: "7,27,47 * * * *"
-    - cron: "17,37,57 * * * *"
+  # schedule disabled while MONITOR_PAUSED — re-enable when trip monitoring resumes
   workflow_dispatch:
     inputs:
       min_severity:
@@ -26,7 +26,12 @@ on:
         default: false
         type: boolean
       depart_advice:
-        description: "Beste Abfahrt Waiblingen→Bužim berechnen + Telegram"
+        description: "Beste Abfahrt Bužim→Waiblingen berechnen + Telegram"
+        required: false
+        default: false
+        type: boolean
+      ignore_pause:
+        description: "Pause ignorieren und Live-APIs trotzdem laufen lassen"
         required: false
         default: false
         type: boolean
@@ -47,15 +52,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check pause flag
+        id: pause
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.ignore_pause || 'false' }}" = "true" ]; then
+            echo "paused=false" >> "$GITHUB_OUTPUT"
+            echo "Pause overridden via workflow_dispatch ignore_pause"
+            exit 0
+          fi
+          if [ -f .github/MONITOR_PAUSED ]; then
+            echo "paused=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Monitor PAUSED (.github/MONITOR_PAUSED) — skipping live API calls"
+          else
+            echo "paused=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Python
+        if: steps.pause.outputs.paused != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install
+        if: steps.pause.outputs.paused != 'true'
         run: pip install -e .
 
       - name: Cache alert state
+        if: steps.pause.outputs.paused != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -70,6 +94,7 @@ jobs:
             traffic-alert-state-
 
       - name: Run monitor
+        if: steps.pause.outputs.paused != 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -97,7 +122,6 @@ jobs:
           fi
 
           mkdir -p site
-          # Perfect + Alerts + Kameras: Schedule ~alle 20 Min (Vision zusätzlich Cache ~20 Min).
           PERFECT_ARGS=(--out site/perfect.json)
           if [[ "${{ github.event.head_commit.message }}" == *"[perfect]"* ]]; then
             PERFECT_ARGS+=(--notify)
@@ -121,6 +145,7 @@ jobs:
           fi
 
       - name: Build mobile dashboard
+        if: steps.pause.outputs.paused != 'true'
         env:
           NAKORDONI_API_KEY: ${{ secrets.NAKORDONI_API_KEY }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
@@ -131,6 +156,7 @@ jobs:
         run: traffic-monitor dashboard --out site
 
       - name: Upload dashboard artifact
+        if: steps.pause.outputs.paused != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: buzimline-dashboard
@@ -138,6 +164,7 @@ jobs:
           retention-days: 7
 
       - name: Publish to gh-pages
+        if: steps.pause.outputs.paused != 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -145,3 +172,10 @@ jobs:
           force_orphan: true
           user_name: github-actions[bot]
           user_email: github-actions[bot]@users.noreply.github.com
+
+      - name: Paused notice
+        if: steps.pause.outputs.paused == 'true'
+        run: |
+          echo "Monitor paused — no OpenAI/Google/Telegram calls."
+          echo "Resume: delete .github/MONITOR_PAUSED, optionally set MONITOR_KEEPALIVE=true,"
+          echo "then Actions → Traffic Monitor → Run workflow (ignore_pause if needed)."

@@ -11,12 +11,13 @@ from rich.panel import Panel
 console = Console()
 TZ = ZoneInfo("Europe/Berlin")
 
-STUTTGART = (9.1829, 48.7758)
-KARAWANKEN = (14.0182, 46.4994)
-LJUBLJANA = (14.5058, 46.0569)
-ZAGREB = (15.9819, 45.8150)
-MALJEVAC = (15.7875, 45.2005)
+# OSRM uses lon,lat — return trip Bužim → Waiblingen
 BUZIM = (16.0324, 45.0613)
+MALJEVAC = (15.7875, 45.2005)
+ZAGREB = (15.9819, 45.8150)
+LJUBLJANA = (14.5058, 46.0569)
+KARAWANKEN = (14.0182, 46.4994)
+WAIBLINGEN = (9.3163822, 48.8325659)
 
 
 def recommend_departure(now: datetime | None = None) -> str:
@@ -38,7 +39,7 @@ def recommend_departure(now: datetime | None = None) -> str:
             candidates.append((score, dt, label, weekday))
 
     candidates.sort(key=lambda x: (-x[0], x[1]))
-    lines = ["## Beste Abfahrt (Stuttgart → Bužim)", ""]
+    lines = ["## Beste Abfahrt (Bužim → Waiblingen)", ""]
     if not candidates:
         lines.append("Keine zukünftige Slot-Empfehlung berechnet.")
         return "\n".join(lines)
@@ -79,7 +80,7 @@ def _score(dt: datetime) -> int:
 
 
 def fetch_route_summary() -> str:
-    coords = [STUTTGART, KARAWANKEN, LJUBLJANA, ZAGREB, MALJEVAC, BUZIM]
+    coords = [BUZIM, MALJEVAC, ZAGREB, LJUBLJANA, KARAWANKEN, WAIBLINGEN]
     coord_str = ";".join(f"{lon},{lat}" for lon, lat in coords)
     url = (
         "https://router.project-osrm.org/route/v1/driving/"
@@ -97,16 +98,17 @@ def fetch_route_summary() -> str:
     hours = route["duration"] / 3600
     legs = route.get("legs") or []
     labels = [
-        "Stuttgart → Karawanken",
-        "Karawanken → Ljubljana",
-        "Ljubljana → Zagreb",
-        "Zagreb → Maljevac",
-        "Maljevac → Bužim",
+        "Bužim → Maljevac",
+        "Maljevac → Zagreb",
+        "Zagreb → Ljubljana",
+        "Ljubljana → Karawanken",
+        "Karawanken → Waiblingen",
     ]
     lines = [
-        "## Beste Route (Hauptkorridor)",
+        "## Beste Route (Hauptkorridor, Rückfahrt)",
         "",
-        "Stuttgart → A8 München → Salzburg → **A10 Tauern** → Villach → **A11 Karawanken** → SI-A2 Ljubljana → Zagreb → Karlovac/Vojnić → **Maljevac** → Velika Kladuša → **Bužim**",
+        "**Bužim** → Velika Kladuša → **Maljevac** → Zagreb → SI-A2 Ljubljana → "
+        "**A11 Karawanken** → Villach → **A10 Tauern** → Salzburg → A8 → **Waiblingen**",
         "",
         f"OSRM freier Verkehr: **~{km:.0f} km / ~{hours:.1f} h** (ohne Pausen, Stau, Grenze).",
         "Realistisch Sommer: **12–15 h**, mit Stau/Grenze auch mehr.",
@@ -121,7 +123,7 @@ def fetch_route_summary() -> str:
     lines += [
         "",
         "### Alternative Grenze",
-        "Wenn Maljevac steht: weiter Richtung **Izačić** (bei Bihać), dann nach Bužim zurück — oft entlastend laut GPMaljevac.",
+        "Wenn Maljevac (BiH→HR) steht: Ausreise über **Izačić** (bei Bihać), dann zurück auf den Korridor.",
         "",
         "### Was du beachten solltest",
         "- **Österreich:** Digitale Vignette (ASFINAG) + **Sondermaut A10 Tauern** + **Karawanken A11**",
@@ -137,4 +139,4 @@ def fetch_route_summary() -> str:
 
 def print_travel_plan() -> None:
     md = "\n\n".join([recommend_departure(), fetch_route_summary()])
-    console.print(Panel(Markdown(md), title="Reiseplan Stuttgart → Bužim", border_style="green"))
+    console.print(Panel(Markdown(md), title="Reiseplan Bužim → Waiblingen", border_style="green"))

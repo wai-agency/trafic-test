@@ -84,7 +84,7 @@ def watch(
 
 
 def _print_table(alerts: list[Alert]) -> None:
-    table = Table(title="Aktuelle Meldungen Stuttgart→Bužim Korridor")
+    table = Table(title="Aktuelle Meldungen Bužim→Waiblingen Korridor")
     table.add_column("Sev")
     table.add_column("Quelle")
     table.add_column("Ort")

@@ -1,3 +1,3 @@
-"""Stuttgart → Bužim traffic monitor."""
+"""Bužim → Waiblingen traffic monitor (return trip)."""
 
 __version__ = "1.0.0"
