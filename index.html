@@ -1,0 +1,1465 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f3d36" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>BuzimLine · Waiblingen → Bužim</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #14231f;
+      --muted: #4d635c;
+      --paper: #f3f0e7;
+      --panel: rgba(255,252,245,0.82);
+      --line: #d7c7a1;
+      --accent: #c47a12;
+      --accent-2: #1f6b57;
+      --critical: #b42318;
+      --warning: #b54708;
+      --clear: #0f6b4c;
+      --shadow: 0 18px 50px rgba(20, 35, 31, 0.12);
+      --radius: 22px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Manrope", system-ui, sans-serif;
+      color: var(--ink);
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #d9ebe3 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #f0dfb8 0%, transparent 50%),
+        linear-gradient(180deg, #eef3ef 0%, var(--paper) 45%, #e7efe9 100%);
+      background-attachment: fixed;
+    }
+    .wrap {
+      width: min(720px, 100%);
+      margin: 0 auto;
+      padding: max(16px, env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));
+    }
+    .brand-row {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+      margin-bottom: 10px;
+    }
+    .brand {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      font-size: clamp(2rem, 8vw, 2.8rem);
+      letter-spacing: -0.03em;
+      line-height: 0.95;
+      margin: 0;
+    }
+    .updated {
+      color: var(--muted); font-size: 0.78rem; white-space: nowrap;
+    }
+    .updated.is-stale { color: #9a3412; font-weight: 700; }
+    .stale-banner {
+      display: none;
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid #f0c2a0;
+      background: linear-gradient(135deg, #fff7ed, #ffedd5);
+      color: #9a3412;
+      font-size: 0.92rem;
+      line-height: 1.35;
+    }
+    .stale-banner.is-visible { display: block; }
+    .stale-banner strong { font-weight: 700; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: calc(var(--radius) + 6px);
+      padding: 22px 18px 20px;
+      background:
+        linear-gradient(135deg, rgba(31,107,87,0.95), rgba(20,55,48,0.92) 55%, rgba(196,122,18,0.88));
+      color: #f7f3ea;
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+    .hero::before {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          transparent 0 18px,
+          rgba(255,255,255,0.05) 18px 19px
+        );
+      opacity: 0.35;
+      z-index: -1;
+    }
+    .route-kicker {
+      font-size: 0.85rem; opacity: 0.9; margin: 0 0 8px;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(1.55rem, 6.5vw, 2.1rem);
+      font-weight: 700; margin: 0; letter-spacing: -0.02em;
+    }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #f5d76e; box-shadow: 0 0 0 0 rgba(245,215,110,0.7);
+      animation: pulse 1.8s ease-out infinite;
+    }
+    .status-critical .dot { background: #ff7b72; }
+    .status-warning .dot { background: #ffb020; }
+    .status-clear .dot { background: #6dffb0; }
+    .hero.status-critical {
+      background:
+        linear-gradient(135deg, rgba(148, 42, 36, 0.97), rgba(88, 28, 26, 0.94) 52%, rgba(170, 78, 38, 0.9));
+    }
+    .hero.status-warning {
+      background:
+        linear-gradient(135deg, rgba(150, 92, 22, 0.96), rgba(96, 54, 18, 0.93) 55%, rgba(176, 112, 28, 0.9));
+    }
+    .hero.status-clear {
+      background:
+        linear-gradient(135deg, rgba(24, 110, 88, 0.96), rgba(18, 72, 60, 0.93) 55%, rgba(40, 120, 90, 0.88));
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.45); }
+      70% { box-shadow: 0 0 0 14px rgba(255,255,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
+    .hint { margin: 10px 0 0; opacity: 0.92; font-size: 0.98rem; line-height: 1.4; max-width: 34ch; }
+    .metrics {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .metric {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 16px;
+      padding: 12px;
+    }
+    .metric.sev-critical {
+      background: rgba(255, 110, 100, 0.22);
+      border-color: rgba(255, 170, 160, 0.45);
+    }
+    .metric.sev-warning {
+      background: rgba(255, 180, 70, 0.2);
+      border-color: rgba(255, 210, 140, 0.42);
+    }
+    .metric.sev-clear {
+      background: rgba(109, 255, 176, 0.16);
+      border-color: rgba(150, 255, 200, 0.35);
+    }
+    .metric.sev-empty {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.12);
+      opacity: 0.85;
+    }
+    .metric span { display: block; font-size: 0.75rem; opacity: 0.8; }
+    .metric strong {
+      display: block; margin-top: 4px;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.25rem; font-weight: 700;
+    }
+    section {
+      margin-top: 18px;
+      background: var(--panel);
+      border: 1px solid rgba(215,199,161,0.65);
+      border-radius: var(--radius);
+      padding: 16px;
+      backdrop-filter: blur(8px);
+    }
+    h2 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.25rem; margin: 0 0 12px; letter-spacing: -0.02em;
+    }
+    h3 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.05rem; margin: 18px 0 10px; letter-spacing: -0.02em;
+    }
+
+    /* Perfect departure */
+    .perfect {
+      padding: 0;
+      overflow: hidden;
+      border: 0;
+      background: transparent;
+    }
+    .perfect-head {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+      margin-bottom: 10px; padding: 0 2px;
+    }
+    .perfect-head h2 { margin: 0; }
+    .perfect-stamp { color: var(--muted); font-size: 0.75rem; font-weight: 600; }
+    .perfect-hero {
+      position: relative;
+      border-radius: calc(var(--radius) + 4px);
+      padding: 22px 18px 18px;
+      color: #f8f4ea;
+      background:
+        radial-gradient(800px 280px at 90% -20%, rgba(245, 196, 110, 0.35), transparent 55%),
+        linear-gradient(160deg, #163a32 0%, #1f5c4a 48%, #8a5a12 120%);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      isolation: isolate;
+    }
+    .perfect-hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -40% 40%;
+      height: 180px;
+      background: radial-gradient(circle, rgba(255,255,255,0.12), transparent 65%);
+      animation: drift 8s ease-in-out infinite alternate;
+      z-index: -1;
+    }
+    @keyframes drift {
+      from { transform: translateX(0); }
+      to { transform: translateX(-30px); }
+    }
+    .perfect-kicker {
+      margin: 0;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+    .perfect-time {
+      margin: 6px 0 0;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(3.4rem, 16vw, 4.8rem);
+      line-height: 0.92;
+      letter-spacing: -0.04em;
+      font-weight: 700;
+      animation: rise 0.7s ease both;
+    }
+    .perfect-day {
+      margin: 8px 0 0;
+      font-weight: 700;
+      opacity: 0.92;
+    }
+    .journey {
+      list-style: none;
+      margin: 18px 0 0;
+      padding: 14px 12px;
+      display: grid;
+      grid-template-columns: 1fr 18px 1fr 18px 1fr;
+      gap: 6px;
+      align-items: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+    }
+    .journey li { text-align: center; }
+    .journey .j-label {
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.75;
+    }
+    .journey strong {
+      display: block;
+      margin-top: 2px;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.35rem;
+    }
+    .journey .j-sub {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.72rem;
+      opacity: 0.8;
+      line-height: 1.25;
+    }
+    .j-line {
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+      border-radius: 2px;
+      animation: shimmer 2.4s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    .perfect-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .perfect-stats div {
+      background: rgba(0,0,0,0.15);
+      border-radius: 14px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .perfect-stats span { display: block; font-size: 0.7rem; opacity: 0.75; }
+    .perfect-stats strong {
+      display: block; margin-top: 3px;
+      font-family: "Fraunces", Georgia, serif; font-size: 1.05rem;
+    }
+    .perfect-route {
+      margin: 14px 0 0;
+      font-size: 0.86rem;
+      line-height: 1.4;
+      opacity: 0.9;
+    }
+    .maps-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 14px;
+      min-height: 48px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: #f4e4b8;
+      color: #17352d;
+      font-weight: 800;
+      text-decoration: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      transition: transform 0.2s ease;
+    }
+    .maps-btn:hover { transform: translateY(-1px); }
+    .maps-btn.ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      box-shadow: none;
+      margin-top: 10px;
+    }
+    .perfect-note {
+      margin: 12px 0 0;
+      font-size: 0.75rem;
+      opacity: 0.78;
+      line-height: 1.35;
+    }
+    .perfect-alt {
+      margin-top: 12px;
+      background: var(--panel);
+      border: 1px solid rgba(215,199,161,0.65);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .alt-kicker {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: 8px;
+    }
+    .alt-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .alt-grid span { display: block; color: var(--muted); font-size: 0.72rem; }
+    .alt-grid strong {
+      display: block; margin-top: 2px;
+      font-family: "Fraunces", Georgia, serif; font-size: 1.05rem;
+    }
+    .perfect-timeline-wrap, .perfect-slots-wrap {
+      margin-top: 12px;
+      background: var(--panel);
+      border: 1px solid rgba(215,199,161,0.65);
+      border-radius: var(--radius);
+      padding: 14px 16px 16px;
+    }
+    .perfect-timeline-wrap h3, .perfect-slots-wrap h3 { margin-top: 0; }
+    .timeline {
+      list-style: none;
+      margin: 0;
+      padding: 4px 2px 8px;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(92px, 1fr);
+      gap: 8px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tl-item {
+      scroll-snap-align: start;
+      background: #fffaf0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px 8px;
+      text-align: center;
+      min-height: 96px;
+      opacity: 0;
+      transform: translateY(8px);
+      animation: rise 0.5s ease forwards;
+    }
+    .tl-item.best {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 2px rgba(31,107,87,0.18);
+      background: #e8f3ee;
+    }
+    .tl-item.night {
+      background: #eef2f6;
+      border-color: #c5d0da;
+    }
+    .tl-item.night.best {
+      background: #e8f3ee;
+      border-color: var(--accent-2);
+    }
+    .tl-depart { display: block; font-weight: 800; font-size: 0.92rem; }
+    .tl-bar {
+      display: block;
+      height: 6px;
+      border-radius: 999px;
+      margin: 8px auto;
+      width: 70%;
+      background: #c8d9d1;
+    }
+    .tl-item.load-frei .tl-bar { background: linear-gradient(90deg, #1f6b57, #6dffb0); }
+    .tl-item.load-ok .tl-bar { background: linear-gradient(90deg, #c47a12, #f0c56d); }
+    .tl-item.load-voll .tl-bar { background: linear-gradient(90deg, #b42318, #ff8f86); }
+    .tl-meta { display: block; font-size: 0.68rem; color: var(--muted); line-height: 1.3; }
+    .slot-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .slot-row {
+      display: grid;
+      grid-template-columns: 72px 1fr 64px;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 8px;
+      border-bottom: 1px dashed var(--line);
+    }
+    .slot-row:last-child { border-bottom: 0; }
+    .slot-when strong, .slot-arrive strong {
+      display: block;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.15rem;
+    }
+    .slot-when span, .slot-arrive span, .slot-path span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.3;
+    }
+    .slot-arrive { text-align: right; }
+    .perfect-empty {
+      background: var(--panel);
+      border: 1px solid rgba(215,199,161,0.65);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .stops {
+      list-style: none; margin: 0; padding: 0;
+      display: grid; gap: 0;
+    }
+    .stops li {
+      display: grid;
+      grid-template-columns: 16px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--line);
+      opacity: 0; transform: translateY(8px);
+      animation: rise 0.55s ease forwards;
+    }
+    .stops li:last-child { border-bottom: 0; }
+    .stops li::before {
+      content: "";
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent-2);
+      box-shadow: 0 0 0 4px rgba(31,107,87,0.12);
+      justify-self: center;
+    }
+    .stop-name { font-weight: 700; }
+    .stop-tag {
+      color: var(--muted); font-size: 0.78rem; font-weight: 600;
+    }
+    .alert {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(215,199,161,0.55);
+      opacity: 0; transform: translateY(10px);
+      animation: rise 0.6s ease forwards;
+    }
+    .alert:last-child { border-bottom: 0; }
+    .alert-top {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-bottom: 6px;
+    }
+    .badge {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 4px 8px; border-radius: 999px;
+      background: #ece7da; color: var(--muted);
+    }
+    .badge.critical { background: #f8d7d4; color: var(--critical); }
+    .badge.warning { background: #fce7c8; color: var(--warning); }
+    .badge.info { background: #ddece7; color: var(--clear); }
+    .alert h3 {
+      margin: 0 0 4px; font-size: 1.02rem; line-height: 1.3;
+    }
+    .alert p {
+      margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.4;
+    }
+    .alert a { color: var(--accent-2); font-weight: 700; font-size: 0.85rem; }
+    .checklist, .downs {
+      margin: 0; padding-left: 1.1rem; color: var(--muted); line-height: 1.55;
+    }
+    .links {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .links a {
+      text-decoration: none;
+      color: var(--ink);
+      background: #fffaf0;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-weight: 700; font-size: 0.88rem;
+      min-height: 44px; display: inline-flex; align-items: center;
+    }
+    .empty { color: var(--muted); margin: 0; }
+    .cams { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 560px) { .cams { grid-template-columns: 1fr 1fr; } }
+    .cam {
+      border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+      background: #fffaf0;
+      padding: 0; margin: 0; width: 100%;
+      text-align: left; font: inherit; color: inherit;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+      appearance: none; display: block;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .cam:active { transform: scale(0.985); }
+    .cam:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+    .cam.relevant { border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(31,107,87,0.18); }
+    .cam-media { position: relative; }
+    .cam img { display: block; width: 100%; height: auto; background: #dfe6e2; }
+    .cam-zoom {
+      position: absolute; right: 10px; bottom: 10px;
+      background: rgba(20,35,31,0.72); color: #f7f3ea;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em;
+      padding: 6px 10px; border-radius: 999px;
+      pointer-events: none;
+    }
+    .cam-body { padding: 10px 12px; }
+    .cam-name { font-weight: 700; font-size: 0.92rem; margin: 0 0 4px; }
+    .cam-meta { color: var(--muted); font-size: 0.8rem; margin: 0; line-height: 1.35; }
+    .cam-sev {
+      display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; padding: 3px 7px; border-radius: 999px; margin-bottom: 4px;
+      background: #ece7da; color: var(--muted);
+    }
+    .cam-sev.critical { background: #f8d7d4; color: var(--critical); }
+    .cam-sev.warning { background: #fce7c8; color: var(--warning); }
+    .cam-sev.clear { background: #ddece7; color: var(--clear); }
+    .border-now {
+      margin-top: 18px;
+      border-radius: calc(var(--radius) + 4px);
+      padding: 18px 16px;
+      background:
+        radial-gradient(700px 240px at 100% 0%, rgba(196,122,18,0.18), transparent 55%),
+        linear-gradient(160deg, #fffaf0 0%, #f3efe4 100%);
+      border: 1px solid rgba(215,199,161,0.75);
+      box-shadow: var(--shadow);
+    }
+    .border-now.is-critical {
+      background:
+        radial-gradient(700px 260px at 0% 0%, rgba(180, 55, 45, 0.16), transparent 55%),
+        linear-gradient(160deg, #fff5f2 0%, #f6ebe6 100%);
+      border-color: rgba(180, 70, 55, 0.35);
+    }
+    .border-now.is-warning {
+      background:
+        radial-gradient(700px 260px at 0% 0%, rgba(196, 122, 18, 0.2), transparent 55%),
+        linear-gradient(160deg, #fff8eb 0%, #f4ead8 100%);
+      border-color: rgba(181, 71, 8, 0.28);
+    }
+    .border-now.is-clear {
+      background:
+        radial-gradient(700px 260px at 0% 0%, rgba(31, 107, 87, 0.14), transparent 55%),
+        linear-gradient(160deg, #f3faf6 0%, #e8f1ec 100%);
+      border-color: rgba(31, 107, 87, 0.28);
+    }
+    .border-now h2 { margin-bottom: 6px; }
+    .border-sides {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .border-side {
+      position: relative;
+      background: rgba(255,255,255,0.65);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px 12px 14px 14px;
+      border-left-width: 5px;
+      transition: background 0.25s ease, border-color 0.25s ease;
+    }
+    .border-side.sev-critical {
+      background: linear-gradient(135deg, #fff0ee 0%, #fde4e0 100%);
+      border-color: #e8b4ae;
+      border-left-color: var(--critical);
+    }
+    .border-side.sev-warning {
+      background: linear-gradient(135deg, #fff6e8 0%, #fce9cc 100%);
+      border-color: #e8c99a;
+      border-left-color: var(--warning);
+    }
+    .border-side.sev-clear {
+      background: linear-gradient(135deg, #eef8f3 0%, #ddeee6 100%);
+      border-color: #b7d4c8;
+      border-left-color: var(--clear);
+    }
+    .border-side.sev-empty {
+      background: rgba(255,255,255,0.45);
+      border-color: #ddd4c0;
+      border-left-color: #b8b0a0;
+      opacity: 0.88;
+    }
+    .side-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .side-kicker {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .side-sev {
+      flex-shrink: 0;
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #ece7da;
+      color: var(--muted);
+    }
+    .side-sev.sev-critical { background: #f8d7d4; color: var(--critical); }
+    .side-sev.sev-warning { background: #fce7c8; color: var(--warning); }
+    .side-sev.sev-clear { background: #ddece7; color: var(--clear); }
+    .side-sev.sev-empty { background: #ebe6da; color: #6a6558; }
+    .side-cars {
+      display: block;
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(1.55rem, 6vw, 2.1rem);
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+    .border-side.sev-critical .side-cars { color: var(--critical); }
+    .border-side.sev-warning .side-cars { color: var(--warning); }
+    .border-side.sev-clear .side-cars { color: var(--clear); }
+    .side-cars small {
+      font-family: "Manrope", system-ui, sans-serif;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .side-meta {
+      display: block;
+      margin-top: 8px;
+      color: var(--ink);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+    .side-note {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+    .border-note { margin: 10px 0 0; color: var(--muted); font-size: 0.86rem; line-height: 1.4; }
+    .stale-tag { color: var(--warning); font-size: 0.72rem; font-weight: 800; }
+    @media (max-width: 520px) {
+      .border-sides { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dot { animation: none; }
+      .border-side { transition: none; }
+    }
+    .lightbox {
+      position: fixed; inset: 0; z-index: 1000;
+      display: none; align-items: center; justify-content: center;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+      background: rgba(10, 18, 16, 0.92);
+      backdrop-filter: blur(6px);
+    }
+    .lightbox.open { display: flex; }
+    .lightbox-inner {
+      width: min(960px, 100%);
+      max-height: 100%;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .lightbox img {
+      width: 100%; height: auto; max-height: min(78vh, 820px);
+      object-fit: contain; border-radius: 14px;
+      background: #111; box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+    }
+    .lightbox-caption {
+      color: #f3efe4; font-weight: 700; font-size: 0.95rem;
+      text-align: center; line-height: 1.35;
+    }
+    .lightbox-close {
+      align-self: flex-end;
+      min-height: 44px; min-width: 44px;
+      border: 0; border-radius: 999px;
+      background: #f4e4b8; color: #17352d;
+      font-weight: 800; font-size: 1rem;
+      cursor: pointer; padding: 10px 16px;
+    }
+    footer {
+      margin-top: 18px; color: var(--muted); font-size: 0.78rem; text-align: center;
+    }
+    @keyframes rise {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .stops li:nth-child(1) { animation-delay: 0.05s; }
+    .stops li:nth-child(2) { animation-delay: 0.1s; }
+    .stops li:nth-child(3) { animation-delay: 0.15s; }
+    .stops li:nth-child(4) { animation-delay: 0.2s; }
+    .stops li:nth-child(5) { animation-delay: 0.25s; }
+    .stops li:nth-child(6) { animation-delay: 0.3s; }
+    .stops li:nth-child(7) { animation-delay: 0.35s; }
+    .tl-item:nth-child(1) { animation-delay: 0.05s; }
+    .tl-item:nth-child(2) { animation-delay: 0.1s; }
+    .tl-item:nth-child(3) { animation-delay: 0.15s; }
+    .tl-item:nth-child(4) { animation-delay: 0.2s; }
+    .tl-item:nth-child(5) { animation-delay: 0.25s; }
+    .tl-item:nth-child(6) { animation-delay: 0.3s; }
+    .alert:nth-child(1) { animation-delay: 0.08s; }
+    .alert:nth-child(2) { animation-delay: 0.14s; }
+    .alert:nth-child(3) { animation-delay: 0.2s; }
+    .alert:nth-child(4) { animation-delay: 0.26s; }
+    .alert:nth-child(5) { animation-delay: 0.32s; }
+    @media (min-width: 720px) {
+      .wrap { padding-top: 28px; }
+      .metrics { grid-template-columns: 1.4fr 1fr 1fr; }
+    }
+    @media (max-width: 420px) {
+      .journey { grid-template-columns: 1fr; gap: 10px; }
+      .j-line { height: 18px; width: 2px; margin: 0 auto; background: linear-gradient(180deg, transparent, rgba(255,255,255,0.7), transparent); }
+      .slot-row { grid-template-columns: 64px 1fr 56px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dot, .stops li, .alert, .tl-item, .perfect-time, .perfect-hero::after, .j-line {
+        animation: none !important; opacity: 1; transform: none;
+      }
+    }
+  </style>
+</head>
+<body class="status-critical">
+  <main class="wrap">
+    <div class="brand-row">
+      <h1 class="brand">BuzimLine</h1>
+      <div class="updated" id="updated-stamp" data-generated-at="2026-08-04T09:51:43.601657+02:00">Update<br/>04.08.2026 09:51</div>
+    </div>
+    <div class="stale-banner" id="stale-banner" role="status" aria-live="polite"></div>
+
+    <header class="hero status-critical">
+      <p class="route-kicker">Waiblingen → Bužim</p>
+      <p class="status-pill"><span class="dot" aria-hidden="true"></span>Stau / Störung</p>
+      <p class="hint">Aktive kritische Meldungen auf dem Korridor — früh starten oder umplanen.</p>
+      <div class="metrics">
+        <div class="metric sev-critical">
+          <span>Einfahrt BiH</span>
+          <strong>20 Autos · ~45 min</strong>
+        </div>
+        <div class="metric sev-critical">
+          <span>Einfahrt HR</span>
+          <strong>13 Autos · ~30 min</strong>
+        </div>
+        <div class="metric">
+          <span>Perfekte Abfahrt</span>
+          <strong id="hero-depart">Tue 04.08. 11:00</strong>
+        </div>
+      </div>
+    </header>
+
+    
+    <section class="border-now is-critical" aria-labelledby="border-title">
+      <h2 id="border-title">Maljevac jetzt</h2>
+      <p class="empty" style="margin:0">Live gezählt von HAK-Kameras · HAK-Cam · gpt-5.6-terra</p>
+      <div class="border-sides">
+        
+            <div class="border-side sev-critical" data-severity="critical">
+              <div class="side-head">
+                <span class="side-kicker">Einfahrt BiH (HR → BiH)</span>
+                <span class="side-sev sev-critical">Stau</span>
+              </div>
+              <strong class="side-cars">20 <small>Autos</small></strong>
+              <span class="side-meta">Wartezeit ~45 min · ~0 LKW · Ende nicht sichtbar</span>
+              <span class='side-note'>Dichte HR→BiH-PKW-Kolonne in der mittleren Spur, sie setzt sich am unteren Bildrand fort. Ende nicht sichtbar </span>
+            </div>
+            
+        
+            <div class="border-side sev-critical" data-severity="critical">
+              <div class="side-head">
+                <span class="side-kicker">Einfahrt HR (BiH → HR)</span>
+                <span class="side-sev sev-critical">Stau</span>
+              </div>
+              <strong class="side-cars">13 <small>Autos</small></strong>
+              <span class="side-meta">Wartezeit ~30 min · ~0 LKW · Ende nicht sichtbar</span>
+              <span class='side-note'>Neun PKW Richtung HR sichtbar, Ende der kurzen Kolonne erkennbar. Dichte Kolonne — Ende unsicher, Worst Case. </span>
+            </div>
+            
+      </div>
+      <p class='border-note'>Nakordoni Referenz: 12 Autos / ~137 min (nicht führend — Anzeige kommt von HAK-Kamera)</p>
+    </section>
+    
+
+    
+    <section class="perfect" aria-labelledby="perfect-title">
+      <div class="perfect-head">
+        <h2 id="perfect-title">Perfekte Abfahrt</h2>
+        <span class="perfect-stamp">Live · 04.08.2026 09:50</span>
+      </div>
+
+      <div class="perfect-hero" id="perfect-hero" data-perfect-root>
+        <p class="perfect-kicker">Waiblingen → Bužim · komplette Route</p>
+        <p class="perfect-time" id="perfect-time">11:00</p>
+        <p class="perfect-day" id="perfect-day">Tue 04.08. · Empfehlung</p>
+
+        <ol class="journey" aria-label="Reisezeitlinie">
+          <li>
+            <span class="j-label">Los</span>
+            <strong id="perfect-los">11:00</strong>
+            <span class="j-sub">Waiblingen</span>
+          </li>
+          <li class="j-line" aria-hidden="true"></li>
+          <li>
+            <span class="j-label">Grenze</span>
+            <strong id="perfect-border">21:40</strong>
+            <span class="j-sub" id="perfect-border-meta">~40 min · 5.0 Autos</span>
+          </li>
+          <li class="j-line" aria-hidden="true"></li>
+          <li>
+            <span class="j-label">Ziel</span>
+            <strong id="perfect-arrive">23:04</strong>
+            <span class="j-sub">Bužim</span>
+          </li>
+        </ol>
+
+        <div class="perfect-stats">
+          <div><span>Gesamt</span><strong id="perfect-total">12h 04min</strong></div>
+          <div><span>Distanz</span><strong id="perfect-dist">~963 km</strong></div>
+          <div><span>Route</span><strong id="perfect-route-id">primary</strong></div>
+        </div>
+
+        <p class="perfect-route">Waiblingen → Salzburg → Villach → Zagreb → Maljevac → Bužim</p>
+        <a class="maps-btn" id="perfect-maps" href="https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving" target="_blank" rel="noopener">In Google Maps öffnen</a>
+        <p class="perfect-note" id="perfect-note">Google Live-Stau + Nakordoni Maljevac-Forecast (+ HAK-Cam KI wenn Ankunft nah). Abfahrtsfenster inkl. 00–05; Update alle ~30 Min. Verpasste Abfahrt → automatisch nächste beste.</p>
+      </div>
+
+      
+        <div class="perfect-alt">
+          <div class="alt-kicker">Freiere Grenze</div>
+          <div class="alt-grid">
+            <div><span>Los</span><strong>Tue 04.08. 12:00</strong></div>
+            <div><span>Grenze</span><strong>~28 min</strong></div>
+            <div><span>Bužim</span><strong>00:36</strong></div>
+          </div>
+          <a class="maps-btn ghost" href="https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Munich%2C%20Germany|Graz%2C%20Austria|Maribor%2C%20Slovenia|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving" target="_blank" rel="noopener">Maps öffnen</a>
+        </div>
+        
+
+      <div class="perfect-timeline-wrap">
+        <h3>Abfahrtsfenster (Hauptroute)</h3>
+        <p class="empty" style="margin:0 0 10px">
+          Inkl. Nacht 00–05 · Update alle ~30 Min
+          · 55 Slots
+        </p>
+        <ol class="timeline">
+        <li class="tl-item load-ok best">
+          <span class="tl-depart">Tue 11:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~40m · Bužim 23:04</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 12:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~38m · Bužim 00:02</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 13:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~28m · Bužim 00:52</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 13:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~28m · Bužim 01:22</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 14:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~26m · Bužim 01:50</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 14:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~26m · Bužim 02:20</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 15:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~28m · Bužim 02:52</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 15:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~28m · Bužim 03:22</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 16:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~22m · Bužim 03:46</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 16:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~22m · Bužim 04:16</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 17:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~18m · Bužim 04:42</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 17:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~18m · Bužim 05:12</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 18:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~18m · Bužim 05:42</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 18:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~18m · Bužim 06:12</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 19:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~23m · Bužim 06:47</span>
+        </li>
+        
+        <li class="tl-item load-frei">
+          <span class="tl-depart">Tue 19:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~23m · Bužim 07:17</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 20:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~28m · Bužim 07:52</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 20:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~28m · Bužim 08:22</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 21:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~40m · Bužim 09:04</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 21:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~40m · Bužim 09:34</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 22:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~42m · Bužim 10:06</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 22:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~42m · Bužim 10:36</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 23:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~46m · Bužim 11:10</span>
+        </li>
+        
+        <li class="tl-item load-ok">
+          <span class="tl-depart">Tue 23:30</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~46m · Bužim 11:40</span>
+        </li>
+        
+        <li class="tl-item load-ok night">
+          <span class="tl-depart">Wed 00:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~46m · Bužim 12:10</span>
+        </li>
+        
+        <li class="tl-item load-ok night">
+          <span class="tl-depart">Wed 01:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~46m · Bužim 13:10</span>
+        </li>
+        
+        <li class="tl-item load-ok night">
+          <span class="tl-depart">Wed 02:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~46m · Bužim 14:10</span>
+        </li>
+        
+        <li class="tl-item load-ok night">
+          <span class="tl-depart">Wed 03:00</span>
+          <span class="tl-bar" aria-hidden="true"></span>
+          <span class="tl-meta">Grenze ~46m · Bužim 15:10</span>
+        </li>
+        </ol>
+      </div>
+
+      <div class="perfect-slots-wrap">
+        <h3>Top Alternativen</h3>
+        <ol class="slot-list">
+        <li class="slot-row">
+          <div class="slot-when">
+            <strong>11:00</strong>
+            <span>Tue 04.08.</span>
+          </div>
+          <div class="slot-path">
+            <span>Grenze 21:40 · ~40 min</span>
+            <span>primary · 12h 04min</span>
+          </div>
+          <div class="slot-arrive">
+            <strong>23:04</strong>
+            <span>Bužim</span>
+          </div>
+        </li>
+        
+        <li class="slot-row">
+          <div class="slot-when">
+            <strong>11:00</strong>
+            <span>Tue 04.08.</span>
+          </div>
+          <div class="slot-path">
+            <span>Grenze 22:24 · ~38 min</span>
+            <span>via_graz · 12h 46min</span>
+          </div>
+          <div class="slot-arrive">
+            <strong>23:46</strong>
+            <span>Bužim</span>
+          </div>
+        </li>
+        
+        <li class="slot-row">
+          <div class="slot-when">
+            <strong>11:00</strong>
+            <span>Tue 04.08.</span>
+          </div>
+          <div class="slot-path">
+            <span>Grenze 22:20 · ~40 min</span>
+            <span>border_izacic · 12h 58min</span>
+          </div>
+          <div class="slot-arrive">
+            <strong>23:58</strong>
+            <span>Bužim</span>
+          </div>
+        </li>
+        
+        <li class="slot-row">
+          <div class="slot-when">
+            <strong>12:00</strong>
+            <span>Tue 04.08.</span>
+          </div>
+          <div class="slot-path">
+            <span>Grenze 22:40 · ~38 min</span>
+            <span>primary · 12h 02min</span>
+          </div>
+          <div class="slot-arrive">
+            <strong>00:02</strong>
+            <span>Bužim</span>
+          </div>
+        </li>
+        
+        <li class="slot-row">
+          <div class="slot-when">
+            <strong>12:00</strong>
+            <span>Tue 04.08.</span>
+          </div>
+          <div class="slot-path">
+            <span>Grenze 23:24 · ~28 min</span>
+            <span>via_graz · 12h 36min</span>
+          </div>
+          <div class="slot-arrive">
+            <strong>00:36</strong>
+            <span>Bužim</span>
+          </div>
+        </li>
+        
+        <li class="slot-row">
+          <div class="slot-when">
+            <strong>11:00</strong>
+            <span>Tue 04.08.</span>
+          </div>
+          <div class="slot-path">
+            <span>Grenze 23:03 · ~40 min</span>
+            <span>via_graz_izacic · 13h 41min</span>
+          </div>
+          <div class="slot-arrive">
+            <strong>00:41</strong>
+            <span>Bužim</span>
+          </div>
+        </li>
+        </ol>
+      </div>
+    </section>
+    
+
+    <section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Bild live ~alle 10s · KI-Zählung ~alle 20 Min · Tippen vergrößert das aktuelle Live-Bild</p><div class='cams'>
+    <button type="button" class="cam relevant" data-cam-open data-cam-title="Maljevac — Ausreise HR → BiH" aria-label="Kamera vergrößern: Maljevac — Ausreise HR → BiH">
+      <div class="cam-media">
+        <img src="https://www.hak.hr/info/kamere/430.jpg" data-cam="https://www.hak.hr/info/kamere/430.jpg" data-snap="cams/430.jpg?t=1785829904" alt="HAK Kamera Maljevac — Ausreise HR → BiH" loading="lazy" />
+        <span class="cam-zoom">Tippen · größer</span>
+      </div>
+      <span class="cam-body">
+        <span class="cam-sev critical">critical</span><br/>
+        <span class="cam-name" style="display:block">Maljevac — Ausreise HR → BiH</span>
+        <span class="cam-meta" style="display:block">HR-&amp;gt;BiH · KI-Wartezeit ~45 min · sichtbar ~13 · ~20 Autos · ~0 LKW · Ende nicht sichtbar · Parkplatz ~12 ignoriert · sunny · dicht</span>
+        <span class="cam-meta" style="display:block;margin-top:4px">Dichte HR→BiH-PKW-Kolonne in der mittleren Spur, sie setzt sich am unteren Bildrand fort. Ende nicht sichtbar — leichte Aufschlagschätzung. | sichtbar ~13 | Fah</span>
+      </span>
+    </button>
+    
+    <button type="button" class="cam relevant" data-cam-open data-cam-title="Maljevac — Einreise BiH → HR" aria-label="Kamera vergrößern: Maljevac — Einreise BiH → HR">
+      <div class="cam-media">
+        <img src="https://www.hak.hr/info/kamere/429.jpg" data-cam="https://www.hak.hr/info/kamere/429.jpg" data-snap="cams/429.jpg?t=1785829904" alt="HAK Kamera Maljevac — Einreise BiH → HR" loading="lazy" />
+        <span class="cam-zoom">Tippen · größer</span>
+      </div>
+      <span class="cam-body">
+        <span class="cam-sev critical">critical</span><br/>
+        <span class="cam-name" style="display:block">Maljevac — Einreise BiH → HR</span>
+        <span class="cam-meta" style="display:block">BiH-&amp;gt;HR · KI-Wartezeit ~30 min · sichtbar ~9 · ~13 Autos · ~0 LKW · Ende nicht sichtbar · Parkplatz ~5 ignoriert · sunny · dicht</span>
+        <span class="cam-meta" style="display:block;margin-top:4px">Neun PKW Richtung HR sichtbar, Ende der kurzen Kolonne erkennbar. Dichte Kolonne — Ende unsicher, Worst Case. Ende nicht sichtbar — leichte Aufschlagschätzung. </span>
+      </span>
+    </button>
+    
+    <button type="button" class="cam" data-cam-open data-cam-title="Velika Kladuša (BiH)" aria-label="Kamera vergrößern: Velika Kladuša (BiH)">
+      <div class="cam-media">
+        <img src="https://www.hak.hr/info/kamere/406.jpg" data-cam="https://www.hak.hr/info/kamere/406.jpg" data-snap="cams/406.jpg?t=1785829904" alt="HAK Kamera Velika Kladuša (BiH)" loading="lazy" />
+        <span class="cam-zoom">Tippen · größer</span>
+      </div>
+      <span class="cam-body">
+        <span class="cam-sev">Live</span><br/>
+        <span class="cam-name" style="display:block">Velika Kladuša (BiH)</span>
+        <span class="cam-meta" style="display:block">BiH</span>
+        
+      </span>
+    </button>
+    </div></section>
+
+    <section aria-labelledby="route-title">
+      <h2 id="route-title">Route</h2>
+      <ol class="stops"><li><span class="stop-name">Waiblingen</span><span class="stop-tag">Start</span></li><li><span class="stop-name">Salzburg</span><span class="stop-tag">AT</span></li><li><span class="stop-name">Tauern</span><span class="stop-tag">A10</span></li><li><span class="stop-name">Karawanken</span><span class="stop-tag">A11</span></li><li><span class="stop-name">Zagreb</span><span class="stop-tag">HR</span></li><li><span class="stop-name">Maljevac</span><span class="stop-tag">Grenze</span></li><li><span class="stop-name">Bužim</span><span class="stop-tag">Ziel</span></li></ol>
+    </section>
+
+    <section aria-labelledby="alerts-title">
+      <h2 id="alerts-title">Live-Meldungen</h2>
+      <div class="alerts">
+    <article class="alert">
+      <div class="alert-top">
+        <span class="badge critical">critical</span>
+        <span class="badge">Nakordoni · ~137 min</span>
+        <span class='badge'>Maljevac</span>
+      </div>
+      <h3>Grenze: Maljevac</h3>
+      <p>Fahrzeuge in Warteschlange: 12 | Geschätzte Wartezeit: ~137 min | Status: yellow | Alter: 1 min</p>
+      <p><a href="https://nakordoni.eu/de/id/id_626" target="_blank" rel="noopener">Quelle öffnen</a></p>
+    </article>
+    
+    <article class="alert">
+      <div class="alert-top">
+        <span class="badge critical">critical</span>
+        <span class="badge">Nakordoni · ~143 min</span>
+        <span class='badge'>Ličko Petrovo Selo</span>
+      </div>
+      <h3>Grenze: Ličko Petrovo Selo</h3>
+      <p>Fahrzeuge in Warteschlange: 13 | Geschätzte Wartezeit: ~143 min | Alter: 1 min</p>
+      <p><a href="https://nakordoni.eu/de/id/id_628" target="_blank" rel="noopener">Quelle öffnen</a></p>
+    </article>
+    
+    <article class="alert">
+      <div class="alert-top">
+        <span class="badge critical">critical</span>
+        <span class="badge">HAK-Cam · ~45 min</span>
+        <span class='badge'>Maljevac — Ausreise HR → BiH</span>
+      </div>
+      <h3>Kamera: Maljevac — Ausreise HR → BiH</h3>
+      <p>Dichte HR→BiH-PKW-Kolonne in der mittleren Spur, sie setzt sich am unteren Bildrand fort. Ende nicht sichtbar — leichte Aufschlagschätzung. | sichtbar ~13 | Fahrzeuge ~20 | LKW ~0 | Wartezeit ~45 min | Parkplatz ignorier</p>
+      <p><a href="https://m.hak.hr/kamera.asp?g=2&amp;k=177" target="_blank" rel="noopener">Quelle öffnen</a></p>
+    </article>
+    
+    <article class="alert">
+      <div class="alert-top">
+        <span class="badge critical">critical</span>
+        <span class="badge">HAK-Cam · ~30 min</span>
+        <span class='badge'>Maljevac — Einreise BiH → HR</span>
+      </div>
+      <h3>Kamera: Maljevac — Einreise BiH → HR</h3>
+      <p>Neun PKW Richtung HR sichtbar, Ende der kurzen Kolonne erkennbar. Dichte Kolonne — Ende unsicher, Worst Case. Ende nicht sichtbar — leichte Aufschlagschätzung. | sichtbar ~9 | Fahrzeuge ~13 | LKW ~0 | Wartezeit ~30 min |</p>
+      <p><a href="https://m.hak.hr/kamera.asp?g=2&amp;k=177" target="_blank" rel="noopener">Quelle öffnen</a></p>
+    </article>
+    
+    <article class="alert">
+      <div class="alert-top">
+        <span class="badge warning">warning</span>
+        <span class="badge">autobahn.de · ~0 min</span>
+        <span class='badge'> München -&gt; Stuttgart</span>
+      </div>
+      <h3>A8 | Wendlingen - Stuttgart-Degerloch</h3>
+      <p>Beginn: 04.08.26 um 06:22 Uhr | Angespannte Verkehrslage, seit 04.08.2026, 04:22 | A8: München -&gt; Stuttgart, zwischen 3.7 km hinter AS Wendlingen und 1.1 km vor AS Stuttgart-Degerloch | Ereignismeldung: | - Im Stillstand</p>
+      <p><a href="https://verkehr.autobahn.de/o/autobahn/A8/services/warning" target="_blank" rel="noopener">Quelle öffnen</a></p>
+    </article>
+    </div>
+    </section>
+
+    <section aria-labelledby="check-title">
+      <h2 id="check-title">Vor dem Losfahren</h2>
+      <ul class="checklist"><li>AT-Vignette + Tauern- &amp; Karawanken-Maut</li><li>SI E-Vignette (evinjeta.dars.si)</li><li>HR-Maut / Karte bereithalten</li><li>Dokumente &amp; Versicherung BiH</li><li>Wasser, Pausen alle 2–3 h</li></ul>
+    </section>
+
+    <section aria-labelledby="links-title">
+      <h2 id="links-title">Live-Tools</h2>
+      <div class="links"><a href="https://www.asfinag.at/" target="_blank" rel="noopener">ASFINAG</a><a href="https://www.promet.si/" target="_blank" rel="noopener">promet.si</a><a href="https://www.hak.hr/info/stanje-na-cestama" target="_blank" rel="noopener">HAK</a><a href="https://gpmaljevac.com/" target="_blank" rel="noopener">GPMaljevac</a><a href="https://www.facebook.com/GPMaljevac" target="_blank" rel="noopener">Facebook GPMaljevac</a><a href="https://nakordoni.eu/en/stat/16/17/4" target="_blank" rel="noopener">Nakordoni Grenze</a></div>
+    </section>
+
+    <section><h2>Quellen offline</h2><ul class='downs'><li><strong>promet</strong> — Client error &#x27;401 Unauthorized&#x27; for url &#x27;https://www.promet.si/dc/b2b.dogodki.json?language=en_US&#x27;
+For more information </li><li><strong>gpmaljevac</strong> — not well-formed (invalid token): line 1, column 119</li></ul></section>
+
+    <footer>BuzimLine · Kameras live · KI/Perfect ~alle 20 Min (Requeue-Loop) · HAK HD + OpenAI Vision (Terra)</footer>
+  </main>
+  <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
+    <div class="lightbox-inner">
+      <button type="button" class="lightbox-close" id="cam-lightbox-close" aria-label="Schließen">Schließen</button>
+      <img id="cam-lightbox-img" alt="" />
+      <div class="lightbox-caption" id="cam-lightbox-caption"></div>
+    </div>
+  </div>
+  <script type="application/json" id="payload">{&quot;generated_at&quot;: &quot;2026-08-04T09:51:43.601657+02:00&quot;, &quot;generated_label&quot;: &quot;04.08.2026 09:51&quot;, &quot;tz&quot;: &quot;Europe/Berlin&quot;, &quot;brand&quot;: &quot;BuzimLine&quot;, &quot;from&quot;: &quot;Waiblingen&quot;, &quot;to&quot;: &quot;Bužim&quot;, &quot;via&quot;: &quot;Waiblingen → A8 → Salzburg → A10 Tauern → Villach → A11 Karawanken → SI-A2 → Zagreb → Maljevac → Velika Kladuša → Bužim&quot;, &quot;approx_km&quot;: 960, &quot;status&quot;: &quot;critical&quot;, &quot;status_label&quot;: &quot;Stau / Störung&quot;, &quot;status_hint&quot;: &quot;Aktive kritische Meldungen auf dem Korridor — früh starten oder umplanen.&quot;, &quot;counts&quot;: {&quot;critical&quot;: 4, &quot;warning&quot;: 1, &quot;total&quot;: 7}, &quot;best_departure&quot;: {&quot;label&quot;: &quot;Sehr früh&quot;, &quot;when&quot;: &quot;Wed 05.08. 03:00&quot;, &quot;iso&quot;: &quot;2026-08-05T03:00:00+02:00&quot;, &quot;score&quot;: 100}, &quot;perfect&quot;: {&quot;generated_at&quot;: &quot;2026-08-04T09:50:57.616967+02:00&quot;, &quot;generated_label&quot;: &quot;04.08.2026 09:50&quot;, &quot;refresh_minutes&quot;: 30, &quot;origin&quot;: &quot;Waiblingen&quot;, &quot;destination&quot;: &quot;Bužim&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;slot_count&quot;: 55, &quot;best&quot;: {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T11:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 11:00&quot;, &quot;depart_short&quot;: &quot;11:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T21:40:40+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 21:40&quot;, &quot;arrive_border_short&quot;: &quot;21:40&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-04T23:04:52+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Tue 04.08. 23:04&quot;, &quot;arrive_buzim_short&quot;: &quot;23:04&quot;, &quot;border_wait_min&quot;: 40, &quot;border_cars&quot;: 5.0, &quot;drive_min&quot;: 684, &quot;total_min&quot;: 724, &quot;total_label&quot;: &quot;12h 04min&quot;, &quot;distance_km&quot;: 963, &quot;route_id&quot;: &quot;primary&quot;, &quot;route_title&quot;: &quot;Hauptroute (Karawanken + Maljevac)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → Salzburg → Tauern → Karawanken → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~5.0 Autos (Band 4.5-5.5) → ~40 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Salzburg, Austria&quot;, &quot;Villach, Austria&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, &quot;best_low_border&quot;: {&quot;badge&quot;: &quot;freie Grenze&quot;, &quot;depart&quot;: &quot;2026-08-04T12:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 12:00&quot;, &quot;depart_short&quot;: &quot;12:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T23:24:09+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 23:24&quot;, &quot;arrive_border_short&quot;: &quot;23:24&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T00:36:21+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 00:36&quot;, &quot;arrive_buzim_short&quot;: &quot;00:36&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;drive_min&quot;: 728, &quot;total_min&quot;: 756, &quot;total_label&quot;: &quot;12h 36min&quot;, &quot;distance_km&quot;: 985, &quot;route_id&quot;: &quot;via_graz&quot;, &quot;route_title&quot;: &quot;Umleitung ohne Karawanken (Graz/Maribor)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → München → Graz → Maribor (Šentilj) → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Munich%2C%20Germany|Graz%2C%20Austria|Maribor%2C%20Slovenia|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~3.5 Autos (Band 3.1-3.9) → ~28 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Munich, Germany&quot;, &quot;Graz, Austria&quot;, &quot;Maribor, Slovenia&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, &quot;top&quot;: [{&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T11:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 11:00&quot;, &quot;depart_short&quot;: &quot;11:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T21:40:40+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 21:40&quot;, &quot;arrive_border_short&quot;: &quot;21:40&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-04T23:04:52+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Tue 04.08. 23:04&quot;, &quot;arrive_buzim_short&quot;: &quot;23:04&quot;, &quot;border_wait_min&quot;: 40, &quot;border_cars&quot;: 5.0, &quot;drive_min&quot;: 684, &quot;total_min&quot;: 724, &quot;total_label&quot;: &quot;12h 04min&quot;, &quot;distance_km&quot;: 963, &quot;route_id&quot;: &quot;primary&quot;, &quot;route_title&quot;: &quot;Hauptroute (Karawanken + Maljevac)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → Salzburg → Tauern → Karawanken → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~5.0 Autos (Band 4.5-5.5) → ~40 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Salzburg, Austria&quot;, &quot;Villach, Austria&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T11:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 11:00&quot;, &quot;depart_short&quot;: &quot;11:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T22:24:09+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 22:24&quot;, &quot;arrive_border_short&quot;: &quot;22:24&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-04T23:46:21+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Tue 04.08. 23:46&quot;, &quot;arrive_buzim_short&quot;: &quot;23:46&quot;, &quot;border_wait_min&quot;: 38, &quot;border_cars&quot;: 4.8, &quot;drive_min&quot;: 728, &quot;total_min&quot;: 766, &quot;total_label&quot;: &quot;12h 46min&quot;, &quot;distance_km&quot;: 985, &quot;route_id&quot;: &quot;via_graz&quot;, &quot;route_title&quot;: &quot;Umleitung ohne Karawanken (Graz/Maribor)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → München → Graz → Maribor (Šentilj) → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Munich%2C%20Germany|Graz%2C%20Austria|Maribor%2C%20Slovenia|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~4.8 Autos (Band 4.3-5.3) → ~38 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Munich, Germany&quot;, &quot;Graz, Austria&quot;, &quot;Maribor, Slovenia&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T11:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 11:00&quot;, &quot;depart_short&quot;: &quot;11:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T22:20:30+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 22:20&quot;, &quot;arrive_border_short&quot;: &quot;22:20&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-04T23:58:30+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Tue 04.08. 23:58&quot;, &quot;arrive_buzim_short&quot;: &quot;23:58&quot;, &quot;border_wait_min&quot;: 40, &quot;border_cars&quot;: 4.8, &quot;drive_min&quot;: 738, &quot;total_min&quot;: 778, &quot;total_label&quot;: &quot;12h 58min&quot;, &quot;distance_km&quot;: 1014, &quot;route_id&quot;: &quot;border_izacic&quot;, &quot;route_title&quot;: &quot;Gleiche Autobahn, Grenze Izačić&quot;, &quot;route_summary&quot;: &quot;Ab Waiblingen, Germany: Karawanken-Korridor, Einreise über Izačić statt Maljevac&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Iza%C4%8Di%C4%87%2C%20Bosnia%20and%20Herzegovina&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Izačić ohne eigenen Forecast; Schätzung analog ~40 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Salzburg, Austria&quot;, &quot;Villach, Austria&quot;, &quot;Zagreb, Croatia&quot;, &quot;Izačić, Bosnia and Herzegovina&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T12:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 12:00&quot;, &quot;depart_short&quot;: &quot;12:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T22:40:40+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 22:40&quot;, &quot;arrive_border_short&quot;: &quot;22:40&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T00:02:52+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 00:02&quot;, &quot;arrive_buzim_short&quot;: &quot;00:02&quot;, &quot;border_wait_min&quot;: 38, &quot;border_cars&quot;: 4.8, &quot;drive_min&quot;: 684, &quot;total_min&quot;: 722, &quot;total_label&quot;: &quot;12h 02min&quot;, &quot;distance_km&quot;: 963, &quot;route_id&quot;: &quot;primary&quot;, &quot;route_title&quot;: &quot;Hauptroute (Karawanken + Maljevac)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → Salzburg → Tauern → Karawanken → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~4.8 Autos (Band 4.3-5.3) → ~38 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Salzburg, Austria&quot;, &quot;Villach, Austria&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T12:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 12:00&quot;, &quot;depart_short&quot;: &quot;12:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T23:24:09+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 23:24&quot;, &quot;arrive_border_short&quot;: &quot;23:24&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T00:36:21+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 00:36&quot;, &quot;arrive_buzim_short&quot;: &quot;00:36&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;drive_min&quot;: 728, &quot;total_min&quot;: 756, &quot;total_label&quot;: &quot;12h 36min&quot;, &quot;distance_km&quot;: 985, &quot;route_id&quot;: &quot;via_graz&quot;, &quot;route_title&quot;: &quot;Umleitung ohne Karawanken (Graz/Maribor)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → München → Graz → Maribor (Šentilj) → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Munich%2C%20Germany|Graz%2C%20Austria|Maribor%2C%20Slovenia|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~3.5 Autos (Band 3.1-3.9) → ~28 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Munich, Germany&quot;, &quot;Graz, Austria&quot;, &quot;Maribor, Slovenia&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T11:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 11:00&quot;, &quot;depart_short&quot;: &quot;11:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T23:03:59+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 23:03&quot;, &quot;arrive_border_short&quot;: &quot;23:03&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T00:41:59+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 00:41&quot;, &quot;arrive_buzim_short&quot;: &quot;00:41&quot;, &quot;border_wait_min&quot;: 40, &quot;border_cars&quot;: 4.8, &quot;drive_min&quot;: 781, &quot;total_min&quot;: 821, &quot;total_label&quot;: &quot;13h 41min&quot;, &quot;distance_km&quot;: 1036, &quot;route_id&quot;: &quot;via_graz_izacic&quot;, &quot;route_title&quot;: &quot;Ohne Karawanken + Grenze Izačić&quot;, &quot;route_summary&quot;: &quot;Ab Waiblingen, Germany: Graz/Maribor und Einreise Izačić (bei Bihać)&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Munich%2C%20Germany|Graz%2C%20Austria|Maribor%2C%20Slovenia|Zagreb%2C%20Croatia|Iza%C4%8Di%C4%87%2C%20Bosnia%20and%20Herzegovina&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Izačić ohne eigenen Forecast; Schätzung analog ~40 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Munich, Germany&quot;, &quot;Graz, Austria&quot;, &quot;Maribor, Slovenia&quot;, &quot;Zagreb, Croatia&quot;, &quot;Izačić, Bosnia and Herzegovina&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T12:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 12:00&quot;, &quot;depart_short&quot;: &quot;12:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T23:20:30+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 23:20&quot;, &quot;arrive_border_short&quot;: &quot;23:20&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T00:47:30+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 00:47&quot;, &quot;arrive_buzim_short&quot;: &quot;00:47&quot;, &quot;border_wait_min&quot;: 29, &quot;border_cars&quot;: 3.5, &quot;drive_min&quot;: 738, &quot;total_min&quot;: 767, &quot;total_label&quot;: &quot;12h 47min&quot;, &quot;distance_km&quot;: 1014, &quot;route_id&quot;: &quot;border_izacic&quot;, &quot;route_title&quot;: &quot;Gleiche Autobahn, Grenze Izačić&quot;, &quot;route_summary&quot;: &quot;Ab Waiblingen, Germany: Karawanken-Korridor, Einreise über Izačić statt Maljevac&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Iza%C4%8Di%C4%87%2C%20Bosnia%20and%20Herzegovina&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Izačić ohne eigenen Forecast; Schätzung analog ~29 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Salzburg, Austria&quot;, &quot;Villach, Austria&quot;, &quot;Zagreb, Croatia&quot;, &quot;Izačić, Bosnia and Herzegovina&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T13:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 13:00&quot;, &quot;depart_short&quot;: &quot;13:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-04T23:40:40+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Tue 04.08. 23:40&quot;, &quot;arrive_border_short&quot;: &quot;23:40&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T00:52:52+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 00:52&quot;, &quot;arrive_buzim_short&quot;: &quot;00:52&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;drive_min&quot;: 684, &quot;total_min&quot;: 712, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;distance_km&quot;: 963, &quot;route_id&quot;: &quot;primary&quot;, &quot;route_title&quot;: &quot;Hauptroute (Karawanken + Maljevac)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → Salzburg → Tauern → Karawanken → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~3.5 Autos (Band 3.1-3.9) → ~28 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Salzburg, Austria&quot;, &quot;Villach, Austria&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T13:30:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 13:30&quot;, &quot;depart_short&quot;: &quot;13:30&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-05T00:10:40+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Wed 05.08. 00:10&quot;, &quot;arrive_border_short&quot;: &quot;00:10&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T01:22:52+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 01:22&quot;, &quot;arrive_buzim_short&quot;: &quot;01:22&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;drive_min&quot;: 684, &quot;total_min&quot;: 712, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;distance_km&quot;: 963, &quot;route_id&quot;: &quot;primary&quot;, &quot;route_title&quot;: &quot;Hauptroute (Karawanken + Maljevac)&quot;, &quot;route_summary&quot;: &quot;Waiblingen → A8 → Salzburg → Tauern → Karawanken → Zagreb → Maljevac → Bužim&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Salzburg%2C%20Austria|Villach%2C%20Austria|Zagreb%2C%20Croatia|Maljevac%2C%20Croatia&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Maljevac-Forecast ~3.5 Autos (Band 3.1-3.9) → ~28 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Salzburg, Austria&quot;, &quot;Villach, Austria&quot;, &quot;Zagreb, Croatia&quot;, &quot;Maljevac, Croatia&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}, {&quot;badge&quot;: null, &quot;depart&quot;: &quot;2026-08-04T12:00:00+02:00&quot;, &quot;depart_label&quot;: &quot;Tue 04.08. 12:00&quot;, &quot;depart_short&quot;: &quot;12:00&quot;, &quot;depart_day&quot;: &quot;Tue 04.08.&quot;, &quot;arrive_border&quot;: &quot;2026-08-05T00:03:59+02:00&quot;, &quot;arrive_border_label&quot;: &quot;Wed 05.08. 00:03&quot;, &quot;arrive_border_short&quot;: &quot;00:03&quot;, &quot;arrive_buzim&quot;: &quot;2026-08-05T01:30:59+02:00&quot;, &quot;arrive_buzim_label&quot;: &quot;Wed 05.08. 01:30&quot;, &quot;arrive_buzim_short&quot;: &quot;01:30&quot;, &quot;border_wait_min&quot;: 29, &quot;border_cars&quot;: 3.5, &quot;drive_min&quot;: 781, &quot;total_min&quot;: 810, &quot;total_label&quot;: &quot;13h 30min&quot;, &quot;distance_km&quot;: 1036, &quot;route_id&quot;: &quot;via_graz_izacic&quot;, &quot;route_title&quot;: &quot;Ohne Karawanken + Grenze Izačić&quot;, &quot;route_summary&quot;: &quot;Ab Waiblingen, Germany: Graz/Maribor und Einreise Izačić (bei Bihać)&quot;, &quot;maps_url&quot;: &quot;https://www.google.com/maps/dir/?api=1&amp;origin=Waiblingen%2C%20Germany&amp;destination=Bu%C5%BEim%2C%20Bosnia%20and%20Herzegovina&amp;waypoints=Munich%2C%20Germany|Graz%2C%20Austria|Maribor%2C%20Slovenia|Zagreb%2C%20Croatia|Iza%C4%8Di%C4%87%2C%20Bosnia%20and%20Herzegovina&amp;travelmode=driving&quot;, &quot;provider&quot;: &quot;Google Live-Verkehr&quot;, &quot;notes&quot;: &quot;Izačić ohne eigenen Forecast; Schätzung analog ~29 min&quot;, &quot;stops&quot;: [&quot;Waiblingen, Germany&quot;, &quot;Munich, Germany&quot;, &quot;Graz, Austria&quot;, &quot;Maribor, Slovenia&quot;, &quot;Zagreb, Croatia&quot;, &quot;Izačić, Bosnia and Herzegovina&quot;, &quot;Bužim, Bosnia and Herzegovina&quot;]}], &quot;timeline&quot;: [{&quot;depart_short&quot;: &quot;11:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T11:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;23:04&quot;, &quot;arrive_border_short&quot;: &quot;21:40&quot;, &quot;border_wait_min&quot;: 40, &quot;border_cars&quot;: 5.0, &quot;total_label&quot;: &quot;12h 04min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: true}, {&quot;depart_short&quot;: &quot;12:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T12:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;00:02&quot;, &quot;arrive_border_short&quot;: &quot;22:40&quot;, &quot;border_wait_min&quot;: 38, &quot;border_cars&quot;: 4.8, &quot;total_label&quot;: &quot;12h 02min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;13:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T13:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;00:52&quot;, &quot;arrive_border_short&quot;: &quot;23:40&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;13:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T13:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;01:22&quot;, &quot;arrive_border_short&quot;: &quot;00:10&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;14:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T14:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;01:50&quot;, &quot;arrive_border_short&quot;: &quot;00:40&quot;, &quot;border_wait_min&quot;: 26, &quot;border_cars&quot;: 3.2, &quot;total_label&quot;: &quot;11h 50min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;14:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T14:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;02:20&quot;, &quot;arrive_border_short&quot;: &quot;01:10&quot;, &quot;border_wait_min&quot;: 26, &quot;border_cars&quot;: 3.2, &quot;total_label&quot;: &quot;11h 50min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;15:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T15:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;02:52&quot;, &quot;arrive_border_short&quot;: &quot;01:40&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;15:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T15:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;03:22&quot;, &quot;arrive_border_short&quot;: &quot;02:10&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;16:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T16:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;03:46&quot;, &quot;arrive_border_short&quot;: &quot;02:40&quot;, &quot;border_wait_min&quot;: 22, &quot;border_cars&quot;: 2.7, &quot;total_label&quot;: &quot;11h 46min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;16:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T16:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;04:16&quot;, &quot;arrive_border_short&quot;: &quot;03:10&quot;, &quot;border_wait_min&quot;: 22, &quot;border_cars&quot;: 2.7, &quot;total_label&quot;: &quot;11h 46min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;17:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T17:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;04:42&quot;, &quot;arrive_border_short&quot;: &quot;03:40&quot;, &quot;border_wait_min&quot;: 18, &quot;border_cars&quot;: 2.2, &quot;total_label&quot;: &quot;11h 42min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;17:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T17:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;05:12&quot;, &quot;arrive_border_short&quot;: &quot;04:10&quot;, &quot;border_wait_min&quot;: 18, &quot;border_cars&quot;: 2.2, &quot;total_label&quot;: &quot;11h 42min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;18:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T18:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;05:42&quot;, &quot;arrive_border_short&quot;: &quot;04:40&quot;, &quot;border_wait_min&quot;: 18, &quot;border_cars&quot;: 2.3, &quot;total_label&quot;: &quot;11h 42min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;18:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T18:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;06:12&quot;, &quot;arrive_border_short&quot;: &quot;05:10&quot;, &quot;border_wait_min&quot;: 18, &quot;border_cars&quot;: 2.3, &quot;total_label&quot;: &quot;11h 42min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;19:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T19:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;06:47&quot;, &quot;arrive_border_short&quot;: &quot;05:40&quot;, &quot;border_wait_min&quot;: 23, &quot;border_cars&quot;: 2.9, &quot;total_label&quot;: &quot;11h 47min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;19:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T19:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;07:17&quot;, &quot;arrive_border_short&quot;: &quot;06:10&quot;, &quot;border_wait_min&quot;: 23, &quot;border_cars&quot;: 2.9, &quot;total_label&quot;: &quot;11h 47min&quot;, &quot;load&quot;: &quot;frei&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;20:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T20:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;07:52&quot;, &quot;arrive_border_short&quot;: &quot;06:40&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;20:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T20:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;08:22&quot;, &quot;arrive_border_short&quot;: &quot;07:10&quot;, &quot;border_wait_min&quot;: 28, &quot;border_cars&quot;: 3.5, &quot;total_label&quot;: &quot;11h 52min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;21:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T21:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;09:04&quot;, &quot;arrive_border_short&quot;: &quot;07:40&quot;, &quot;border_wait_min&quot;: 40, &quot;border_cars&quot;: 5.0, &quot;total_label&quot;: &quot;12h 04min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;21:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T21:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;09:34&quot;, &quot;arrive_border_short&quot;: &quot;08:10&quot;, &quot;border_wait_min&quot;: 40, &quot;border_cars&quot;: 5.0, &quot;total_label&quot;: &quot;12h 04min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;22:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T22:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;10:06&quot;, &quot;arrive_border_short&quot;: &quot;08:40&quot;, &quot;border_wait_min&quot;: 42, &quot;border_cars&quot;: 5.2, &quot;total_label&quot;: &quot;12h 06min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;22:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T22:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;10:36&quot;, &quot;arrive_border_short&quot;: &quot;09:10&quot;, &quot;border_wait_min&quot;: 42, &quot;border_cars&quot;: 5.2, &quot;total_label&quot;: &quot;12h 06min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;23:00&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T23:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;11:10&quot;, &quot;arrive_border_short&quot;: &quot;09:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;23:30&quot;, &quot;depart_day&quot;: &quot;Tue&quot;, &quot;depart&quot;: &quot;2026-08-04T23:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;11:40&quot;, &quot;arrive_border_short&quot;: &quot;10:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;00:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T00:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;12:10&quot;, &quot;arrive_border_short&quot;: &quot;10:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: true, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;01:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T01:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;13:10&quot;, &quot;arrive_border_short&quot;: &quot;11:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: true, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;02:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T02:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;14:10&quot;, &quot;arrive_border_short&quot;: &quot;12:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: true, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;03:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T03:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;15:10&quot;, &quot;arrive_border_short&quot;: &quot;13:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: true, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;04:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T04:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;16:10&quot;, &quot;arrive_border_short&quot;: &quot;14:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: true, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;05:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T05:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;17:10&quot;, &quot;arrive_border_short&quot;: &quot;15:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: true, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;06:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T06:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;18:10&quot;, &quot;arrive_border_short&quot;: &quot;16:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;07:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T07:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;19:10&quot;, &quot;arrive_border_short&quot;: &quot;17:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;08:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T08:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;20:10&quot;, &quot;arrive_border_short&quot;: &quot;18:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;09:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T09:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;21:10&quot;, &quot;arrive_border_short&quot;: &quot;19:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;10:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T10:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;22:10&quot;, &quot;arrive_border_short&quot;: &quot;20:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;11:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T11:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;23:10&quot;, &quot;arrive_border_short&quot;: &quot;21:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;12:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T12:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;00:10&quot;, &quot;arrive_border_short&quot;: &quot;22:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;13:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T13:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;01:10&quot;, &quot;arrive_border_short&quot;: &quot;23:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;13:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T13:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;01:40&quot;, &quot;arrive_border_short&quot;: &quot;00:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;14:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T14:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;02:10&quot;, &quot;arrive_border_short&quot;: &quot;00:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;14:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T14:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;02:40&quot;, &quot;arrive_border_short&quot;: &quot;01:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;15:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T15:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;03:10&quot;, &quot;arrive_border_short&quot;: &quot;01:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;15:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T15:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;03:40&quot;, &quot;arrive_border_short&quot;: &quot;02:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;16:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T16:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;04:10&quot;, &quot;arrive_border_short&quot;: &quot;02:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;16:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T16:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;04:40&quot;, &quot;arrive_border_short&quot;: &quot;03:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;17:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T17:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;05:10&quot;, &quot;arrive_border_short&quot;: &quot;03:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;17:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T17:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;05:40&quot;, &quot;arrive_border_short&quot;: &quot;04:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;18:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T18:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;06:10&quot;, &quot;arrive_border_short&quot;: &quot;04:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;18:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T18:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;06:40&quot;, &quot;arrive_border_short&quot;: &quot;05:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;19:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T19:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;07:10&quot;, &quot;arrive_border_short&quot;: &quot;05:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;19:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T19:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;07:40&quot;, &quot;arrive_border_short&quot;: &quot;06:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;20:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T20:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;08:10&quot;, &quot;arrive_border_short&quot;: &quot;06:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;20:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T20:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;08:40&quot;, &quot;arrive_border_short&quot;: &quot;07:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;21:00&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T21:00:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;09:10&quot;, &quot;arrive_border_short&quot;: &quot;07:40&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}, {&quot;depart_short&quot;: &quot;21:30&quot;, &quot;depart_day&quot;: &quot;Wed&quot;, &quot;depart&quot;: &quot;2026-08-05T21:30:00+02:00&quot;, &quot;arrive_buzim_short&quot;: &quot;09:40&quot;, &quot;arrive_border_short&quot;: &quot;08:10&quot;, &quot;border_wait_min&quot;: 46, &quot;border_cars&quot;: 5.8, &quot;total_label&quot;: &quot;12h 10min&quot;, &quot;load&quot;: &quot;ok&quot;, &quot;night&quot;: false, &quot;is_best&quot;: false}], &quot;hint&quot;: &quot;Google Live-Stau + Nakordoni Maljevac-Forecast (+ HAK-Cam KI wenn Ankunft nah). Abfahrtsfenster inkl. 00–05; Update alle ~30 Min. Verpasste Abfahrt → automatisch nächste beste.&quot;, &quot;advanced&quot;: false}, &quot;stops&quot;: [[&quot;Waiblingen&quot;, &quot;Start&quot;], [&quot;Salzburg&quot;, &quot;AT&quot;], [&quot;Tauern&quot;, &quot;A10&quot;], [&quot;Karawanken&quot;, &quot;A11&quot;], [&quot;Zagreb&quot;, &quot;HR&quot;], [&quot;Maljevac&quot;, &quot;Grenze&quot;], [&quot;Bužim&quot;, &quot;Ziel&quot;]], &quot;maljevac_now&quot;: {&quot;name&quot;: &quot;Maljevac&quot;, &quot;source&quot;: &quot;HAK-Cam · gpt-5.6-terra&quot;, &quot;cars&quot;: 20, &quot;wait_min&quot;: 45, &quot;trucks&quot;: 0, &quot;stale&quot;: false, &quot;note&quot;: &quot;Live gezählt von HAK-Kameras (OpenAI Vision)&quot;, &quot;to_bih&quot;: {&quot;name&quot;: &quot;Maljevac — Ausreise HR → BiH&quot;, &quot;direction&quot;: &quot;HR-&gt;BiH&quot;, &quot;cars&quot;: 20, &quot;wait_min&quot;: 45, &quot;trucks&quot;: 0, &quot;severity&quot;: &quot;critical&quot;, &quot;note&quot;: &quot;Dichte HR→BiH-PKW-Kolonne in der mittleren Spur, sie setzt sich am unteren Bildrand fort. Ende nicht sichtbar — leichte Aufschlagschätzung. &quot;, &quot;cam_id&quot;: 430, &quot;queue_end_visible&quot;: false}, &quot;to_hr&quot;: {&quot;name&quot;: &quot;Maljevac — Einreise BiH → HR&quot;, &quot;direction&quot;: &quot;BiH-&gt;HR&quot;, &quot;cars&quot;: 13, &quot;wait_min&quot;: 30, &quot;trucks&quot;: 0, &quot;severity&quot;: &quot;critical&quot;, &quot;note&quot;: &quot;Neun PKW Richtung HR sichtbar, Ende der kurzen Kolonne erkennbar. Dichte Kolonne — Ende unsicher, Worst Case. Ende nicht sichtbar — leichte &quot;, &quot;cam_id&quot;: 429, &quot;queue_end_visible&quot;: false}}, &quot;borders&quot;: [{&quot;name&quot;: &quot;Maljevac&quot;, &quot;cars&quot;: 12, &quot;wait_min&quot;: 137, &quot;stale&quot;: false, &quot;age_min&quot;: 1, &quot;wait_status&quot;: &quot;yellow&quot;, &quot;url&quot;: &quot;https://nakordoni.eu/de/id/id_626&quot;, &quot;ppid&quot;: &quot;id_626&quot;}, {&quot;name&quot;: &quot;Litscho Petrowo Selo&quot;, &quot;cars&quot;: 3, &quot;wait_min&quot;: 30, &quot;stale&quot;: false, &quot;age_min&quot;: 88, &quot;wait_status&quot;: &quot;green&quot;, &quot;url&quot;: &quot;https://nakordoni.eu/de/id/id_546&quot;, &quot;ppid&quot;: &quot;id_546&quot;}, {&quot;name&quot;: &quot;Ličko Petrovo Selo&quot;, &quot;cars&quot;: 13, &quot;wait_min&quot;: 143, &quot;stale&quot;: false, &quot;age_min&quot;: 1, &quot;wait_status&quot;: null, &quot;url&quot;: &quot;https://nakordoni.eu/de/id/id_628&quot;, &quot;ppid&quot;: &quot;id_628&quot;}], &quot;cameras&quot;: [{&quot;id&quot;: 430, &quot;name&quot;: &quot;Maljevac — Ausreise HR → BiH&quot;, &quot;direction&quot;: &quot;HR-&gt;BiH&quot;, &quot;relevant&quot;: true, &quot;role&quot;: &quot;to_bih&quot;, &quot;image_url&quot;: &quot;https://www.hak.hr/info/kamere/430.jpg&quot;, &quot;page_url&quot;: &quot;https://m.hak.hr/kamera.asp?g=2&amp;k=177&quot;, &quot;severity&quot;: &quot;critical&quot;, &quot;verdict&quot;: &quot;Dichte HR→BiH-PKW-Kolonne in der mittleren Spur, sie setzt sich am unteren Bildrand fort. Ende nicht sichtbar — leichte Aufschlagschätzung. | sichtbar ~13 | Fahrzeuge ~20 | LKW ~0 | Wartezeit ~45 min | Parkplatz ignoriert ~12 | Kolonnenende nicht sichtbar | Wetter: sunny | Lage: dicht | KI: gpt-5.6-terra&quot;, &quot;wait_min&quot;: 45, &quot;vehicles&quot;: 20, &quot;vehicles_visible&quot;: 13, &quot;trucks&quot;: 0, &quot;weather&quot;: &quot;sunny&quot;, &quot;road&quot;: &quot;dicht&quot;, &quot;queue_end_visible&quot;: false, &quot;parked_ignored&quot;: 12, &quot;live_url&quot;: &quot;https://www.hak.hr/info/kamere/430.jpg&quot;, &quot;snapshot_url&quot;: &quot;cams/430.jpg?t=1785829904&quot;}, {&quot;id&quot;: 429, &quot;name&quot;: &quot;Maljevac — Einreise BiH → HR&quot;, &quot;direction&quot;: &quot;BiH-&gt;HR&quot;, &quot;relevant&quot;: true, &quot;role&quot;: &quot;to_hr&quot;, &quot;image_url&quot;: &quot;https://www.hak.hr/info/kamere/429.jpg&quot;, &quot;page_url&quot;: &quot;https://m.hak.hr/kamera.asp?g=2&amp;k=177&quot;, &quot;severity&quot;: &quot;critical&quot;, &quot;verdict&quot;: &quot;Neun PKW Richtung HR sichtbar, Ende der kurzen Kolonne erkennbar. Dichte Kolonne — Ende unsicher, Worst Case. Ende nicht sichtbar — leichte Aufschlagschätzung. | sichtbar ~9 | Fahrzeuge ~13 | LKW ~0 | Wartezeit ~30 min | Parkplatz ignoriert ~5 | Kolonnenende nicht sichtbar | Wetter: sunny | Lage: dicht | KI: gpt-5.6-terra&quot;, &quot;wait_min&quot;: 30, &quot;vehicles&quot;: 13, &quot;vehicles_visible&quot;: 9, &quot;trucks&quot;: 0, &quot;weather&quot;: &quot;sunny&quot;, &quot;road&quot;: &quot;dicht&quot;, &quot;queue_end_visible&quot;: false, &quot;parked_ignored&quot;: 5, &quot;live_url&quot;: &quot;https://www.hak.hr/info/kamere/429.jpg&quot;, &quot;snapshot_url&quot;: &quot;cams/429.jpg?t=1785829904&quot;}, {&quot;id&quot;: 406, &quot;name&quot;: &quot;Velika Kladuša (BiH)&quot;, &quot;direction&quot;: &quot;BiH&quot;, &quot;relevant&quot;: false, &quot;role&quot;: &quot;&quot;, &quot;image_url&quot;: &quot;https://www.hak.hr/info/kamere/406.jpg&quot;, &quot;page_url&quot;: &quot;https://m.hak.hr/kamera.asp?g=2&amp;k=177&quot;, &quot;severity&quot;: null, &quot;verdict&quot;: null, &quot;wait_min&quot;: null, &quot;vehicles&quot;: null, &quot;vehicles_visible&quot;: null, &quot;trucks&quot;: null, &quot;weather&quot;: null, &quot;road&quot;: null, &quot;queue_end_visible&quot;: null, &quot;parked_ignored&quot;: null, &quot;live_url&quot;: &quot;https://www.hak.hr/info/kamere/406.jpg&quot;, &quot;snapshot_url&quot;: &quot;cams/406.jpg?t=1785829904&quot;}], &quot;alerts&quot;: [{&quot;severity&quot;: &quot;critical&quot;, &quot;source&quot;: &quot;Nakordoni&quot;, &quot;title&quot;: &quot;Grenze: Maljevac&quot;, &quot;detail&quot;: &quot;Fahrzeuge in Warteschlange: 12 | Geschätzte Wartezeit: ~137 min | Status: yellow | Alter: 1 min&quot;, &quot;location&quot;: &quot;Maljevac&quot;, &quot;url&quot;: &quot;https://nakordoni.eu/de/id/id_626&quot;, &quot;delay_min&quot;: 137}, {&quot;severity&quot;: &quot;critical&quot;, &quot;source&quot;: &quot;Nakordoni&quot;, &quot;title&quot;: &quot;Grenze: Ličko Petrovo Selo&quot;, &quot;detail&quot;: &quot;Fahrzeuge in Warteschlange: 13 | Geschätzte Wartezeit: ~143 min | Alter: 1 min&quot;, &quot;location&quot;: &quot;Ličko Petrovo Selo&quot;, &quot;url&quot;: &quot;https://nakordoni.eu/de/id/id_628&quot;, &quot;delay_min&quot;: 143}, {&quot;severity&quot;: &quot;critical&quot;, &quot;source&quot;: &quot;HAK-Cam&quot;, &quot;title&quot;: &quot;Kamera: Maljevac — Ausreise HR → BiH&quot;, &quot;detail&quot;: &quot;Dichte HR→BiH-PKW-Kolonne in der mittleren Spur, sie setzt sich am unteren Bildrand fort. Ende nicht sichtbar — leichte Aufschlagschätzung. | sichtbar ~13 | Fahrzeuge ~20 | LKW ~0 | Wartezeit ~45 min | Parkplatz ignoriert ~12 | Kolonnenende nicht sichtbar | Wetter: sunny | Lage: dicht | KI: gpt-5.6-terra&quot;, &quot;location&quot;: &quot;Maljevac — Ausreise HR → BiH&quot;, &quot;url&quot;: &quot;https://m.hak.hr/kamera.asp?g=2&amp;k=177&quot;, &quot;delay_min&quot;: 45}, {&quot;severity&quot;: &quot;critical&quot;, &quot;source&quot;: &quot;HAK-Cam&quot;, &quot;title&quot;: &quot;Kamera: Maljevac — Einreise BiH → HR&quot;, &quot;detail&quot;: &quot;Neun PKW Richtung HR sichtbar, Ende der kurzen Kolonne erkennbar. Dichte Kolonne — Ende unsicher, Worst Case. Ende nicht sichtbar — leichte Aufschlagschätzung. | sichtbar ~9 | Fahrzeuge ~13 | LKW ~0 | Wartezeit ~30 min | Parkplatz ignoriert ~5 | Kolonnenende nicht sichtbar | Wetter: sunny | Lage: dicht | KI: gpt-5.6-terra&quot;, &quot;location&quot;: &quot;Maljevac — Einreise BiH → HR&quot;, &quot;url&quot;: &quot;https://m.hak.hr/kamera.asp?g=2&amp;k=177&quot;, &quot;delay_min&quot;: 30}, {&quot;severity&quot;: &quot;warning&quot;, &quot;source&quot;: &quot;autobahn.de&quot;, &quot;title&quot;: &quot;A8 | Wendlingen - Stuttgart-Degerloch&quot;, &quot;detail&quot;: &quot;Beginn: 04.08.26 um 06:22 Uhr | Angespannte Verkehrslage, seit 04.08.2026, 04:22 | A8: München -&gt; Stuttgart, zwischen 3.7 km hinter AS Wendlingen und 1.1 km vor AS Stuttgart-Degerloch | Ereignismeldung: | - Im Stillstand | - Reisezeitverlust: 26 Minuten (abnehmend)&quot;, &quot;location&quot;: &quot; München -&gt; Stuttgart&quot;, &quot;url&quot;: &quot;https://verkehr.autobahn.de/o/autobahn/A8/services/warning&quot;, &quot;delay_min&quot;: 0}], &quot;sources_down&quot;: [{&quot;source&quot;: &quot;promet&quot;, &quot;detail&quot;: &quot;Client error &#x27;401 Unauthorized&#x27; for url &#x27;https://www.promet.si/dc/b2b.dogodki.json?language=en_US&#x27;\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401&quot;}, {&quot;source&quot;: &quot;gpmaljevac&quot;, &quot;detail&quot;: &quot;not well-formed (invalid token): line 1, column 119&quot;}], &quot;checklist&quot;: [&quot;AT-Vignette + Tauern- &amp; Karawanken-Maut&quot;, &quot;SI E-Vignette (evinjeta.dars.si)&quot;, &quot;HR-Maut / Karte bereithalten&quot;, &quot;Dokumente &amp; Versicherung BiH&quot;, &quot;Wasser, Pausen alle 2–3 h&quot;], &quot;links&quot;: [{&quot;label&quot;: &quot;ASFINAG&quot;, &quot;url&quot;: &quot;https://www.asfinag.at/&quot;}, {&quot;label&quot;: &quot;promet.si&quot;, &quot;url&quot;: &quot;https://www.promet.si/&quot;}, {&quot;label&quot;: &quot;HAK&quot;, &quot;url&quot;: &quot;https://www.hak.hr/info/stanje-na-cestama&quot;}, {&quot;label&quot;: &quot;GPMaljevac&quot;, &quot;url&quot;: &quot;https://gpmaljevac.com/&quot;}, {&quot;label&quot;: &quot;Facebook GPMaljevac&quot;, &quot;url&quot;: &quot;https://www.facebook.com/GPMaljevac&quot;}, {&quot;label&quot;: &quot;Nakordoni Grenze&quot;, &quot;url&quot;: &quot;https://nakordoni.eu/en/stat/16/17/4&quot;}], &quot;recommend_md&quot;: &quot;## Beste Abfahrt (Stuttgart → Bužim)\n\n**Empfehlung:** Wed 05.08.2026 03:00 Europe/Berlin — Sehr früh (beste Stau-Chance)\n\nWeitere sinnvolle Slots:\n- Wed 05.08.2026 03:00 — Sehr früh (beste Stau-Chance) (Score 100/100)\n- Wed 05.08.2026 04:30 — Früh (Score 100/100)\n- Tue 04.08.2026 21:00 — Nachtfahrt (nur wenn du ausgeschlafen bist) (Score 90/100)\n- Wed 05.08.2026 21:00 — Nachtfahrt (nur wenn du ausgeschlafen bist) (Score 90/100)&quot;}</script>
+  <script>
+    // Page reload alone cannot refresh KI/Perfect if Actions cron was skipped.
+    setTimeout(() => location.reload(), 20 * 60 * 1000);
+
+    (function staleMonitorBanner() {
+      const stamp = document.getElementById('updated-stamp');
+      const banner = document.getElementById('stale-banner');
+      if (!stamp || !banner) return;
+      const raw = stamp.getAttribute('data-generated-at');
+      if (!raw) return;
+      const generated = Date.parse(raw);
+      if (Number.isNaN(generated)) return;
+      const STALE_MS = 45 * 60 * 1000;
+      function tick() {
+        const ageMin = Math.max(0, Math.round((Date.now() - generated) / 60000));
+        if (Date.now() - generated < STALE_MS) {
+          banner.classList.remove('is-visible');
+          banner.textContent = '';
+          stamp.classList.remove('is-stale');
+          return;
+        }
+        stamp.classList.add('is-stale');
+        banner.classList.add('is-visible');
+        banner.innerHTML = '<strong>Daten veraltet</strong> · letzter Monitor-Lauf vor '
+          + ageMin + ' Min. Requeue-Loop oder Cron hat Lücke. '
+          + 'Kamerabilder unten sind trotzdem live. '
+          + 'Frisch laden: Actions → Traffic Monitor → Run workflow.';
+      }
+      tick();
+      setInterval(tick, 30000);
+    })();
+
+    // Live HAK stills on the dashboard (~10s). KI analysis stays on the server cycle.
+    (function liveCameraFeed() {
+      const REFRESH_MS = 10000;
+
+      function bust(url) {
+        if (!url) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return url + sep + 't=' + Date.now();
+      }
+
+      function setLive(img, url) {
+        if (!img || !url) return;
+        const next = new Image();
+        next.onload = () => { img.src = next.src; };
+        next.onerror = () => {
+          const snap = img.dataset.snap;
+          if (snap && !img.src.includes(snap.split('?')[0])) {
+            img.src = snap;
+          }
+        };
+        next.src = bust(url);
+      }
+
+      function refreshAll() {
+        document.querySelectorAll('img[data-cam]').forEach((img) => {
+          setLive(img, img.dataset.cam);
+        });
+        const box = document.getElementById('cam-lightbox');
+        const lb = document.getElementById('cam-lightbox-img');
+        if (lb && lb.dataset.cam && box && box.classList.contains('open')) {
+          setLive(lb, lb.dataset.cam);
+        }
+      }
+
+      refreshAll();
+      setInterval(refreshAll, REFRESH_MS);
+    })();
+
+    (function cameraLightbox() {
+      const box = document.getElementById('cam-lightbox');
+      const img = document.getElementById('cam-lightbox-img');
+      const caption = document.getElementById('cam-lightbox-caption');
+      const closeBtn = document.getElementById('cam-lightbox-close');
+      if (!box || !img) return;
+
+      function openCam(btn) {
+        const thumb = btn.querySelector('img[data-cam]');
+        if (!thumb) return;
+        // Enlarge the live feed (same base as the card), with a fresh cache-bust.
+        const live = thumb.dataset.cam || thumb.currentSrc || thumb.src;
+        const sep = live.includes('?') ? '&' : '?';
+        img.src = live + sep + 't=' + Date.now();
+        img.dataset.cam = thumb.dataset.cam || live;
+        img.dataset.snap = thumb.dataset.snap || '';
+        img.alt = thumb.alt || 'Kamera';
+        img.onerror = () => {
+          const shown = thumb.currentSrc || thumb.src;
+          if (shown) img.src = shown;
+        };
+        caption.textContent = btn.dataset.camTitle || thumb.alt || '';
+        box.hidden = false;
+        box.classList.add('open');
+        box.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        closeBtn.focus();
+      }
+      function closeCam() {
+        box.classList.remove('open');
+        box.hidden = true;
+        box.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        img.removeAttribute('src');
+        img.onerror = null;
+      }
+
+      document.querySelectorAll('button.cam[data-cam-open]').forEach((btn) => {
+        btn.addEventListener('click', () => openCam(btn));
+      });
+      closeBtn.addEventListener('click', closeCam);
+      box.addEventListener('click', (e) => { if (e.target === box) closeCam(); });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && box.classList.contains('open')) closeCam();
+      });
+    })();
+
+    // If recommended departure is missed, roll to next-best from cached slots
+    (function advancePerfectLive() {
+      const raw = document.getElementById('payload');
+      if (!raw) return;
+      let data;
+      try { data = JSON.parse(raw.textContent); } catch (_) { return; }
+      const perfect = data && data.perfect;
+      if (!perfect || !perfect.best) return;
+      const graceMs = 5 * 60 * 1000;
+
+      function upcoming(slots) {
+        const now = Date.now();
+        return (slots || []).filter((s) => {
+          const t = Date.parse(s.depart);
+          return !Number.isNaN(t) && t > now - graceMs;
+        });
+      }
+
+      function pickBest() {
+        const pool = upcoming(perfect.top);
+        if (!pool.length) return null;
+        pool.sort((a, b) => {
+          const aa = Date.parse(a.arrive_buzim || a.depart);
+          const bb = Date.parse(b.arrive_buzim || b.depart);
+          return aa - bb;
+        });
+        return pool[0];
+      }
+
+      function apply(best) {
+        const set = (id, text) => {
+          const el = document.getElementById(id);
+          if (el && text != null) el.textContent = text;
+        };
+        set('perfect-time', best.depart_short);
+        set('perfect-day', (best.depart_day || '') + ' · ' + (best.badge || 'nächste beste'));
+        set('perfect-los', best.depart_short);
+        set('perfect-border', best.arrive_border_short);
+        if (best.border_wait_min != null && best.border_cars != null) {
+          set('perfect-border-meta', '~' + best.border_wait_min + ' min · ' + best.border_cars + ' Autos');
+        }
+        set('perfect-arrive', best.arrive_buzim_short);
+        set('perfect-total', best.total_label);
+        if (best.distance_km != null) set('perfect-dist', '~' + best.distance_km + ' km');
+        set('perfect-route-id', best.route_id);
+        const maps = document.getElementById('perfect-maps');
+        if (maps && best.maps_url) maps.href = best.maps_url;
+        set('hero-depart', best.depart_label || best.depart_short);
+        document.querySelectorAll('.tl-item').forEach((li) => {
+          const label = (li.querySelector('.tl-depart') || {}).textContent || '';
+          const hit = label.indexOf(best.depart_short) !== -1;
+          li.classList.toggle('best', hit);
+        });
+      }
+
+      function tick() {
+        const next = pickBest();
+        if (!next) return;
+        if (next.depart !== perfect.best.depart) {
+          next.badge = 'nächste beste';
+          perfect.best = next;
+          apply(next);
+        }
+      }
+      tick();
+      setInterval(tick, 30000);
+    })();
+  </script>
+</body>
+</html>
