@@ -5,8 +5,8 @@ from urllib.parse import quote
 
 from traffic_monitor.models import Alert
 
-# Lat,Lon for Google Maps waypoints
-STUTTGART = (48.7758, 9.1829)
+# Lat,Lon for Google Maps waypoints — RETURN trip Bužim → Waiblingen
+WAIBLINGEN = (48.8325659, 9.3163822)
 MUENCHEN = (48.1351, 11.5820)
 SALZBURG = (47.8095, 13.0550)
 VILLACH = (46.6103, 13.8558)
@@ -54,60 +54,60 @@ class RouteOption:
 ROUTES: dict[str, RouteOption] = {
     "primary": RouteOption(
         id="primary",
-        title="Hauptroute (Karawanken + Maljevac)",
-        summary="A8 → Salzburg → Tauern → Karawanken → Zagreb → Maljevac → Bužim",
-        points=(STUTTGART, SALZBURG, VILLACH, ZAGREB, MALJEVAC, BUZIM),
+        title="Hauptroute (Maljevac + Karawanken)",
+        summary="Bužim → Maljevac → Zagreb → Karawanken → Tauern → Salzburg → Waiblingen",
+        points=(BUZIM, MALJEVAC, ZAGREB, VILLACH, SALZBURG, WAIBLINGEN),
         labels=(
-            "Stuttgart, Germany",
-            "Salzburg, Austria",
-            "Villach, Austria",
-            "Zagreb, Croatia",
-            "Maljevac, Croatia",
             "Bužim, Bosnia and Herzegovina",
+            "Maljevac, Croatia",
+            "Zagreb, Croatia",
+            "Villach, Austria",
+            "Salzburg, Austria",
+            "Waiblingen, Germany",
         ),
     ),
     "via_graz": RouteOption(
         id="via_graz",
-        title="Umleitung ohne Karawanken (Graz/Maribor)",
-        summary="A8 → München → Graz → Maribor (Šentilj) → Zagreb → Maljevac → Bužim",
-        points=(STUTTGART, MUENCHEN, GRAZ, MARIBOR, ZAGREB, MALJEVAC, BUZIM),
+        title="Umleitung ohne Karawanken (Maribor/Graz)",
+        summary="Bužim → Maljevac → Zagreb → Maribor → Graz → München → Waiblingen",
+        points=(BUZIM, MALJEVAC, ZAGREB, MARIBOR, GRAZ, MUENCHEN, WAIBLINGEN),
         labels=(
-            "Stuttgart, Germany",
-            "Munich, Germany",
-            "Graz, Austria",
-            "Maribor, Slovenia",
-            "Zagreb, Croatia",
-            "Maljevac, Croatia",
             "Bužim, Bosnia and Herzegovina",
+            "Maljevac, Croatia",
+            "Zagreb, Croatia",
+            "Maribor, Slovenia",
+            "Graz, Austria",
+            "Munich, Germany",
+            "Waiblingen, Germany",
         ),
     ),
     "border_izacic": RouteOption(
         id="border_izacic",
         title="Gleiche Autobahn, Grenze Izačić",
-        summary="Karawanken-Korridor, Einreise über Izačić statt Maljevac",
-        points=(STUTTGART, SALZBURG, VILLACH, ZAGREB, IZACIC, BUZIM),
+        summary="Ausreise über Izačić statt Maljevac, dann Karawanken-Korridor",
+        points=(BUZIM, IZACIC, ZAGREB, VILLACH, SALZBURG, WAIBLINGEN),
         labels=(
-            "Stuttgart, Germany",
-            "Salzburg, Austria",
-            "Villach, Austria",
-            "Zagreb, Croatia",
-            "Izačić, Bosnia and Herzegovina",
             "Bužim, Bosnia and Herzegovina",
+            "Izačić, Bosnia and Herzegovina",
+            "Zagreb, Croatia",
+            "Villach, Austria",
+            "Salzburg, Austria",
+            "Waiblingen, Germany",
         ),
     ),
     "via_graz_izacic": RouteOption(
         id="via_graz_izacic",
         title="Ohne Karawanken + Grenze Izačić",
-        summary="Graz/Maribor und Einreise Izačić (bei Bihać)",
-        points=(STUTTGART, MUENCHEN, GRAZ, MARIBOR, ZAGREB, IZACIC, BUZIM),
+        summary="Ausreise Izačić, dann Maribor/Graz nach Waiblingen",
+        points=(BUZIM, IZACIC, ZAGREB, MARIBOR, GRAZ, MUENCHEN, WAIBLINGEN),
         labels=(
-            "Stuttgart, Germany",
-            "Munich, Germany",
-            "Graz, Austria",
-            "Maribor, Slovenia",
-            "Zagreb, Croatia",
-            "Izačić, Bosnia and Herzegovina",
             "Bužim, Bosnia and Herzegovina",
+            "Izačić, Bosnia and Herzegovina",
+            "Zagreb, Croatia",
+            "Maribor, Slovenia",
+            "Graz, Austria",
+            "Munich, Germany",
+            "Waiblingen, Germany",
         ),
     ),
 }
@@ -215,7 +215,7 @@ def build_reroute_alerts(alerts: list[Alert]) -> list[Alert]:
                 severity="critical",
                 title=f"🧭 Alternative: {route.title}",
                 detail=detail,
-                location="Stuttgart → Bužim",
+                location="Bužim → Waiblingen",
                 url=maps,
                 event_id=f"reroute:{route.id}:{reason}",
             )

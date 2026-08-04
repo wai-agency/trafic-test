@@ -3,7 +3,12 @@
 ## Cursor Cloud specific instructions
 
 This repository is a single, self-contained **Python CLI** (`traffic-monitor`, brand
-"BuzimLine") that monitors live traffic/border data for a Stuttgart → Bužim road trip.
+"BuzimLine") that monitors live traffic/border data for a **Bužim → Waiblingen**
+return trip (outbound was Waiblingen → Bužim).
+
+**Pause:** if `.github/MONITOR_PAUSED` exists, GitHub Actions skips live API calls
+(OpenAI/Google/Telegram). Requeue only runs when `MONITOR_KEEPALIVE=true` and the
+pause file is absent. Do not remove the pause file unless the user asks to resume.
 There is **no database, message broker, or companion backend service** — the CLI only makes
 outbound HTTPS calls to public third-party APIs and (optionally) serves a static HTML
 dashboard. See `README.md` (German) for the full feature/command reference.

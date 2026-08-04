@@ -14,7 +14,7 @@ from traffic_monitor.recommend import print_travel_plan
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="traffic-monitor",
-        description="Stau-Monitor & Reisehilfe Stuttgart → Bužim",
+        description="Stau-Monitor & Reisehilfe Bužim → Waiblingen",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     dash.add_argument("--host", default="0.0.0.0")
     dash.add_argument("--port", type=int, default=8080)
 
-    dep = sub.add_parser("depart", help="Beste Abfahrt/Route heute (Waiblingen→Bužim)")
+    dep = sub.add_parser("depart", help="Beste Abfahrt/Route heute (Bužim→Waiblingen)")
     dep.add_argument("--notify", action="store_true", help="Ergebnis per Telegram senden")
     dep.add_argument("--console-only", action="store_true")
 

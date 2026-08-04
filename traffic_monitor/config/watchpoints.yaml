@@ -1,8 +1,8 @@
-# Watchpoints for Stuttgart → Bužim (via Karawanken + Maljevac)
+# Watchpoints for Bužim → Waiblingen (return via Maljevac + Karawanken)
 route:
-  from: Waiblingen
-  to: Bužim
-  via: "Waiblingen → A8 → Salzburg → A10 Tauern → Villach → A11 Karawanken → SI-A2 → Zagreb → Maljevac → Velika Kladuša → Bužim"
+  from: Bužim
+  to: Waiblingen
+  via: "Bužim → Maljevac → Zagreb → SI-A2 → A11 Karawanken → Villach → A10 Tauern → Salzburg → A8 → Waiblingen"
   approx_km: 960
   free_flow_hours: 11.5
 
@@ -44,12 +44,12 @@ keywords:
     - zaprt
     - zatrpan
 
-# German Autobahn.de roads on the corridor
+# German Autobahn.de roads on the corridor (approach to Waiblingen)
 autobahn_roads:
   - A8
   - A99
 
-# Bounding box roughly Stuttgart → Salzburg (lat, lon)
+# Bounding box roughly Salzburg → Stuttgart area (lat, lon)
 autobahn_bbox:
   min_lat: 47.35
   max_lat: 49.0
@@ -59,10 +59,10 @@ autobahn_bbox:
 # Delay seconds on Autobahn.de before alerting
 autobahn_delay_threshold_sec: 600
 
-# Optional border IDs for Nakordoni (HR=16, BA=17, car=4)
+# Optional border IDs for Nakordoni (BA=17 → HR=16, car=4) — return direction
 nakordoni:
-  origin: 16
-  destination: 17
+  origin: 17
+  destination: 16
   crossing_type: 4
   # Alert if estimated wait minutes >= this
   wait_threshold_min: 45
@@ -84,22 +84,12 @@ hak_cameras:
   # HD JPEGs (www.hak.hr) — sharper than m.hak.hr/cam.asp (640×360).
   image_base: "https://www.hak.hr/info/kamere"
   # OpenAI vision model for queue counting. Override via OPENAI_VISION_MODEL env.
-  # Higher-quality GPT-5.6 Terra for queue counting. Override via OPENAI_VISION_MODEL.
   # Vision JPEGs are cached ~20 min (see hak_cameras._CACHE_TTL_SEC).
   model: gpt-5.6-terra
   # Only alert from AI verdicts at/above this severity.
   analyze_min_severity: warning
   cams:
-    - id: 430
-      name: "Maljevac — Ausreise HR → BiH"
-      direction: "HR->BiH"
-      relevant: true
-      analyze: true
-      role: "to_bih"
-      # Geometry for vision: booths/blue canopy = background.
-      count_hint: >
-        Cam 430 / HR→BiH: nur die mittlere Kolonne zur blauen Kabinen-Ueberdachung.
-        Gegenrichtung und Parkplatz rechts ignorieren. Oft 15–30 Autos.
+    # Return trip: your queue is BiH → HR (cam 429)
     - id: 429
       name: "Maljevac — Einreise BiH → HR"
       direction: "BiH->HR"
@@ -108,7 +98,16 @@ hak_cameras:
       role: "to_hr"
       count_hint: >
         Cam 429 / BiH→HR: nur Autos Richtung Betrachter (Markierung HR).
-        Kolonne Richtung Kabinen (BiH) und Parkplaetze ignorieren.
+        Kolonne Richtung Kabinen (BiH) und Parkplaetze ignorieren. Oft 15–30 Autos.
+    - id: 430
+      name: "Maljevac — Ausreise HR → BiH"
+      direction: "HR->BiH"
+      relevant: true
+      analyze: true
+      role: "to_bih"
+      count_hint: >
+        Cam 430 / HR→BiH: nur die mittlere Kolonne zur blauen Kabinen-Ueberdachung.
+        Gegenrichtung und Parkplatz rechts ignorieren. Oft 15–30 Autos.
     - id: 406
       name: "Velika Kladuša (BiH)"
       direction: "BiH"

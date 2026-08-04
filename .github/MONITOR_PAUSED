@@ -1,0 +1,4 @@
+# Monitor is PAUSED — no live API calls (OpenAI / Google / Telegram spam).
+# Delete this file (or empty it and set MONITOR_KEEPALIVE=true) when the user
+# says to start the return-trip monitoring again.
+paused=true

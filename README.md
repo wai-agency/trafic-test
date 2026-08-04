@@ -1,23 +1,23 @@
-# Stuttgart → Bužim Traffic Monitor
+# Bužim → Waiblingen Traffic Monitor (Rückfahrt)
 
-Lokales Stau-/Grenz-Überwachungssystem für die Fahrt **Stuttgart → Bužim** (über Karawanken + Maljevac), plus konkrete Reiseempfehlung.
+Lokales Stau-/Grenz-Überwachungssystem für die **Rückfahrt Bužim → Waiblingen** (über Maljevac + Karawanken), plus konkrete Reiseempfehlung.
 
-## Reise-Empfehlung (Stand: Dienstag-Fahrt)
+**Status:** Monitor ist **pausiert** (`.github/MONITOR_PAUSED`) — keine Live-API-Kosten, bis du sagst „starten“.
 
-Morgen ist **Dienstag** — unter der Woche einer der besten Tage.
+## Reise-Empfehlung (Rückfahrt)
 
 ### Beste Abfahrt
-- **Ideal: 03:00–05:00** ab Stuttgart (Europe/Berlin)
-- Alternative: **heute Abend ab ~21:00** (Nachtfahrt), wenn du fit bist — Karawanken dann oft am frühen Morgen freier
+- **Ideal: 03:00–05:00** ab Bužim (Europe/Berlin)
+- Alternative: **Abend ab ~21:00** (Nachtfahrt), wenn du fit bist
 - Meiden: Freitag 14–20, Samstag 06–15
 
 ### Beste Route
-**Stuttgart → A8 → München → Salzburg → A10 Tauern → Villach → A11 Karawanken → SI-A2 → Ljubljana → Zagreb → Karlovac/Vojnić → Maljevac → Velika Kladuša → Bužim**
+**Bužim → Maljevac → Zagreb → SI-A2 → A11 Karawanken → Villach → A10 Tauern → Salzburg → A8 → Waiblingen**
 
 - OSRM freier Verkehr: ca. **930 km / ~11 h**
 - Realistisch im Sommer: **12–15 h** (+ Stau/Grenze)
 
-**Grenze:** Für Bužim meist **Maljevac / Velika Kladuša**. Wenn dort lange Kolonnen: **Izačić** (Bihać) als Alternative prüfen.
+**Grenze:** Ausreise meist **Maljevac (BiH→HR)**. Wenn dort lange Kolonnen: **Izačić** (Bihać) als Alternative prüfen.
 
 ### Was du beachten solltest
 | Land | Pflicht / Kosten |

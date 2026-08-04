@@ -19,13 +19,13 @@ from traffic_monitor.sources.nakordoni import snapshot_borders
 console = Console()
 
 ROUTE_STOPS = [
-    ("Waiblingen", "Start"),
-    ("Salzburg", "AT"),
-    ("Tauern", "A10"),
-    ("Karawanken", "A11"),
-    ("Zagreb", "HR"),
+    ("Bužim", "Start"),
     ("Maljevac", "Grenze"),
-    ("Bužim", "Ziel"),
+    ("Zagreb", "HR"),
+    ("Karawanken", "A11"),
+    ("Tauern", "A10"),
+    ("Salzburg", "AT"),
+    ("Waiblingen", "Ziel"),
 ]
 
 
@@ -110,8 +110,8 @@ def _payload_from_alerts(
     to_hr = _cam_side("to_hr", ("bih->hr", "einreise", "bih → hr", "bih→hr"))
     maljevac_now = None
     if to_bih or to_hr:
-        # Headline uses outbound to BiH (your direction), fallback inbound
-        primary = to_bih or to_hr
+        # Return trip: your queue is BiH → HR; fallback opposite lane
+        primary = to_hr or to_bih
         maljevac_now = {
             "name": "Maljevac",
             "source": "HAK-Cam · gpt-5.6-terra",
@@ -119,7 +119,7 @@ def _payload_from_alerts(
             "wait_min": primary.get("wait_min"),
             "trucks": primary.get("trucks"),
             "stale": False,
-            "note": "Live gezählt von HAK-Kameras (OpenAI Vision)",
+            "note": "Live gezählt von HAK-Kameras (OpenAI Vision) · Rückfahrt BiH→HR",
             "to_bih": to_bih,
             "to_hr": to_hr,
         }
@@ -129,8 +129,8 @@ def _payload_from_alerts(
         "generated_label": now.strftime("%d.%m.%Y %H:%M"),
         "tz": "Europe/Berlin",
         "brand": "BuzimLine",
-        "from": route.get("from", "Waiblingen"),
-        "to": route.get("to", "Bužim"),
+        "from": route.get("from", "Bužim"),
+        "to": route.get("to", "Waiblingen"),
         "via": route.get("via", ""),
         "approx_km": route.get("approx_km", 960),
         "status": status,
@@ -231,7 +231,7 @@ def _perfect_section(perfect: dict | None) -> str:
         <li class="tl-item load-{html.escape(t.get('load', 'ok'))}{' best' if t.get('is_best') else ''}{' night' if t.get('night') else ''}">
           <span class="tl-depart">{html.escape(t.get('depart_day', ''))} {html.escape(t['depart_short'])}</span>
           <span class="tl-bar" aria-hidden="true"></span>
-          <span class="tl-meta">Grenze ~{t['border_wait_min']}m · Bužim {html.escape(t['arrive_buzim_short'])}</span>
+          <span class="tl-meta">Grenze ~{t['border_wait_min']}m · Waiblingen {html.escape(t['arrive_buzim_short'])}</span>
         </li>
         """
         for t in timeline[:28]
@@ -250,7 +250,7 @@ def _perfect_section(perfect: dict | None) -> str:
           </div>
           <div class="slot-arrive">
             <strong>{html.escape(s['arrive_buzim_short'])}</strong>
-            <span>Bužim</span>
+            <span>Waiblingen</span>
           </div>
         </li>
         """
@@ -265,7 +265,7 @@ def _perfect_section(perfect: dict | None) -> str:
           <div class="alt-grid">
             <div><span>Los</span><strong>{html.escape(alt['depart_label'])}</strong></div>
             <div><span>Grenze</span><strong>~{alt['border_wait_min']} min</strong></div>
-            <div><span>Bužim</span><strong>{html.escape(alt['arrive_buzim_short'])}</strong></div>
+            <div><span>Waiblingen</span><strong>{html.escape(alt['arrive_buzim_short'])}</strong></div>
           </div>
           <a class="maps-btn ghost" href="{html.escape(alt['maps_url'])}" target="_blank" rel="noopener">Maps öffnen</a>
         </div>
@@ -284,7 +284,7 @@ def _perfect_section(perfect: dict | None) -> str:
       </div>
 
       <div class="perfect-hero" id="perfect-hero" data-perfect-root>
-        <p class="perfect-kicker">Waiblingen → Bužim · komplette Route</p>
+        <p class="perfect-kicker">Bužim → Waiblingen · Rückfahrt</p>
         <p class="perfect-time" id="perfect-time">{html.escape(best['depart_short'])}</p>
         <p class="perfect-day" id="perfect-day">{html.escape(best['depart_day'])} · {html.escape(best.get('badge') or 'Empfehlung')}</p>
 
@@ -292,7 +292,7 @@ def _perfect_section(perfect: dict | None) -> str:
           <li>
             <span class="j-label">Los</span>
             <strong id="perfect-los">{html.escape(best['depart_short'])}</strong>
-            <span class="j-sub">Waiblingen</span>
+            <span class="j-sub">Bužim</span>
           </li>
           <li class="j-line" aria-hidden="true"></li>
           <li>
@@ -304,7 +304,7 @@ def _perfect_section(perfect: dict | None) -> str:
           <li>
             <span class="j-label">Ziel</span>
             <strong id="perfect-arrive">{html.escape(best['arrive_buzim_short'])}</strong>
-            <span class="j-sub">Bužim</span>
+            <span class="j-sub">Waiblingen</span>
           </li>
         </ol>
 
@@ -367,7 +367,7 @@ def render_html(payload: dict) -> str:
         else payload["best_departure"]["when"]
     )
     hero_arrive = (
-        f"Bužim ~{payload['perfect']['best']['arrive_buzim_short']}"
+        f"Waiblingen ~{payload['perfect']['best']['arrive_buzim_short']}"
         if payload.get("perfect") and payload["perfect"].get("best")
         else "siehe Empfehlung"
     )
@@ -1169,13 +1169,13 @@ def render_html(payload: dict) -> str:
       <p class="status-pill"><span class="dot" aria-hidden="true"></span>{html.escape(payload["status_label"])}</p>
       <p class="hint">{html.escape(payload["status_hint"])}</p>
       <div class="metrics">
-        <div class="metric sev-{html.escape(bih_sev)}">
-          <span>Einfahrt BiH</span>
-          <strong>{html.escape(hero_bih)}</strong>
-        </div>
         <div class="metric sev-{html.escape(hr_sev)}">
-          <span>Einfahrt HR</span>
+          <span>Ausreise HR (eure Richtung)</span>
           <strong>{html.escape(hero_hr)}</strong>
+        </div>
+        <div class="metric sev-{html.escape(bih_sev)}">
+          <span>Gegenrichtung BiH</span>
+          <strong>{html.escape(hero_bih)}</strong>
         </div>
         <div class="metric">
           <span>Perfekte Abfahrt</span>
@@ -1535,8 +1535,8 @@ def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
       <h2 id="border-title">Maljevac jetzt</h2>
       <p class="empty" style="margin:0">Live gezählt von HAK-Kameras · {source}</p>
       <div class="border-sides">
-        {side_card("Einfahrt BiH (HR → BiH)", to_bih)}
-        {side_card("Einfahrt HR (BiH → HR)", to_hr)}
+        {side_card("Eure Richtung (BiH → HR)", to_hr)}
+        {side_card("Gegenrichtung (HR → BiH)", to_bih)}
       </div>
       {ref}
     </section>

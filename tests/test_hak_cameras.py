@@ -11,20 +11,20 @@ CONFIG = {
         "analyze_min_severity": "warning",
         "cams": [
             {
-                "id": 430,
-                "name": "Maljevac — Ausreise HR → BiH",
-                "direction": "HR->BiH",
-                "relevant": True,
-                "analyze": True,
-                "role": "to_bih",
-            },
-            {
                 "id": 429,
                 "name": "Maljevac — Einreise BiH → HR",
                 "direction": "BiH->HR",
                 "relevant": True,
                 "analyze": True,
                 "role": "to_hr",
+            },
+            {
+                "id": 430,
+                "name": "Maljevac — Ausreise HR → BiH",
+                "direction": "HR->BiH",
+                "relevant": True,
+                "analyze": True,
+                "role": "to_bih",
             },
         ],
     }
@@ -356,7 +356,7 @@ def test_fetch_builds_alerts_including_clear_as_info(monkeypatch, tmp_path):
     assert calls["n"] == 0
 
 
-def test_maljevac_cam_wait_prefers_outbound():
+def test_maljevac_cam_wait_prefers_return_direction():
     alerts = [
         Alert(
             source="HAK-Cam",
@@ -365,7 +365,7 @@ def test_maljevac_cam_wait_prefers_outbound():
             detail="x",
             location="Maljevac — Einreise BiH → HR",
             delay_min=10,
-            extras={"direction": "BiH->HR"},
+            extras={"direction": "BiH->HR", "role": "to_hr"},
         ),
         Alert(
             source="HAK-Cam",
@@ -374,19 +374,20 @@ def test_maljevac_cam_wait_prefers_outbound():
             detail="x",
             location="Maljevac — Ausreise HR → BiH",
             delay_min=55,
-            extras={"direction": "HR->BiH", "relevant": True},
+            extras={"direction": "HR->BiH", "relevant": True, "role": "to_bih"},
         ),
     ]
-    assert hc.maljevac_cam_wait_min(alerts) == 55
+    # Return trip uses BiH→HR wait, not the opposite lane
+    assert hc.maljevac_cam_wait_min(alerts) == 10
 
 
 def test_cameras_from_config():
     cams = hc.cameras_from_config(CONFIG)
-    assert [c["id"] for c in cams] == [430, 429]
+    assert [c["id"] for c in cams] == [429, 430]
     assert cams[0]["relevant"] is True
-    assert cams[0]["role"] == "to_bih"
-    assert cams[1]["role"] == "to_hr"
-    assert cams[0]["image_url"].endswith("/430.jpg")
+    assert cams[0]["role"] == "to_hr"
+    assert cams[1]["role"] == "to_bih"
+    assert cams[0]["image_url"].endswith("/429.jpg")
     assert "www.hak.hr/info/kamere" in cams[0]["image_url"]
 
 
@@ -410,12 +411,12 @@ def test_dashboard_embeds_cameras():
         extras={"vehicles": 7, "trucks": 0, "weather": "sunny", "road": "flüssig", "role": "to_hr"},
     )
     payload = _payload_from_alerts(CONFIG, [cam_bih, cam_hr])
-    assert [c["id"] for c in payload["cameras"]] == [430, 429]
-    relevant = next(c for c in payload["cameras"] if c["id"] == 430)
-    assert relevant["severity"] == "critical"
-    assert relevant["wait_min"] == 80
-    assert relevant["vehicles"] == 22
-    assert relevant["role"] == "to_bih"
+    assert [c["id"] for c in payload["cameras"]] == [429, 430]
+    relevant = next(c for c in payload["cameras"] if c["id"] == 429)
+    assert relevant["severity"] == "warning"
+    assert relevant["wait_min"] == 25
+    assert relevant["vehicles"] == 7
+    assert relevant["role"] == "to_hr"
 
     mj = payload["maljevac_now"]
     assert mj is not None
@@ -424,15 +425,15 @@ def test_dashboard_embeds_cameras():
     assert mj["to_bih"]["wait_min"] == 80
     assert mj["to_hr"]["cars"] == 7
     assert mj["to_hr"]["wait_min"] == 25
-    # Headline primary = direction to BiH
-    assert mj["cars"] == 22
+    # Headline primary = return direction BiH → HR
+    assert mj["cars"] == 7
 
     html_out = render_html(payload)
     assert "Grenz-Kameras" in html_out
     assert "https://www.hak.hr/info/kamere/430.jpg" in html_out
     assert "https://m.hak.hr/kamera.asp" in html_out or "Grenz-Kameras" in html_out
-    assert "Einfahrt BiH (HR → BiH)" in html_out
-    assert "Einfahrt HR (BiH → HR)" in html_out
+    assert "Eure Richtung (BiH → HR)" in html_out
+    assert "Gegenrichtung (HR → BiH)" in html_out
     assert "data-cam=" in html_out
     assert 'data-cam-open' in html_out
     assert 'id="cam-lightbox"' in html_out

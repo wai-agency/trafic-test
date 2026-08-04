@@ -6,7 +6,6 @@ from zoneinfo import ZoneInfo
 import httpx
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 from traffic_monitor.config import env, load_config
 from traffic_monitor.live_routing import (
@@ -19,24 +18,25 @@ from traffic_monitor.live_routing import (
 )
 from traffic_monitor.models import Alert
 from traffic_monitor.notifiers import build_notifiers
-from traffic_monitor.reroute import ROUTES, RouteOption
+from traffic_monitor.reroute import ROUTES, RouteOption, BUZIM, WAIBLINGEN
 from traffic_monitor.sources.autobahn import fetch_autobahn
 from traffic_monitor.sources.nakordoni import fetch_nakordoni
 
 console = Console()
 TZ = ZoneInfo("Europe/Berlin")
 
-# Waiblingen (Nominatim)
-WAIBLINGEN = (48.8325659, 9.3163822)
+# Re-export for perfect_depart / others
+__all__ = ["WAIBLINGEN", "BUZIM", "with_origin", "advise_today", "score_route_now"]
 
 
 def with_origin(route: RouteOption, origin: tuple[float, float], origin_label: str) -> RouteOption:
+    """Compatibility helper — return routes already start at Bužim; only relabel if needed."""
+    if route.points and route.points[0] == origin:
+        return route
     return RouteOption(
         id=route.id,
         title=route.title,
-        summary=route.summary.replace("A8 →", f"Waiblingen → A8 →", 1)
-        if route.summary.startswith("A8")
-        else f"Ab {origin_label}: {route.summary}",
+        summary=f"Ab {origin_label}: {route.summary}",
         points=(origin, *route.points[1:]),
         labels=(origin_label, *route.labels[1:]),
     )
@@ -116,12 +116,11 @@ def advise_today(
     except Exception as exc:  # noqa: BLE001
         console.print(f"[yellow]Autobahn: {exc}[/yellow]")
 
-    origin_label = "Waiblingen, Germany"
     candidates = [
-        with_origin(ROUTES["primary"], WAIBLINGEN, origin_label),
-        with_origin(ROUTES["via_graz"], WAIBLINGEN, origin_label),
-        with_origin(ROUTES["border_izacic"], WAIBLINGEN, origin_label),
-        with_origin(ROUTES["via_graz_izacic"], WAIBLINGEN, origin_label),
+        ROUTES["primary"],
+        ROUTES["via_graz"],
+        ROUTES["border_izacic"],
+        ROUTES["via_graz_izacic"],
     ]
 
     # Current scores
@@ -207,14 +206,14 @@ def advise_today(
 
     lines = [
         f"Stand: {now.strftime('%a %d.%m.%Y %H:%M')} Europe/Berlin",
-        "Von: Waiblingen → Bužim",
+        "Von: Bužim → Waiblingen",
         "",
     ]
 
     # Border snapshot
     border_alerts = [a for a in alerts if a.source.lower() == "nakordoni"]
     if border_alerts:
-        lines.append("Grenze HR→BA (live):")
+        lines.append("Grenze BA→HR (live):")
         for a in sorted(border_alerts, key=lambda x: x.delay_min or 9999):
             lines.append(f"- {a.location or a.title}: ~{a.delay_min} min")
         lines.append("")
@@ -256,17 +255,15 @@ def advise_today(
         lines.append("Keine Slot-Berechnung möglich (Routing/Keys prüfen).")
 
     text = "\n".join(lines)
-    console.print(Panel(text, title="Abfahrt Waiblingen → Bužim", border_style="green"))
+    console.print(Panel(text, title="Abfahrt Bužim → Waiblingen", border_style="green"))
 
     if notify:
-        from traffic_monitor.models import Alert
-
         msg = Alert(
             source="DepartAdvisor",
             severity="critical",
-            title="🚗 Beste Abfahrt heute Waiblingen → Bužim",
+            title="🚗 Beste Abfahrt heute Bužim → Waiblingen",
             detail=text,
-            location="Waiblingen → Bužim",
+            location="Bužim → Waiblingen",
             url=now_scores[0].route.google_maps_url() if now_scores else "",
             event_id=f"depart:{now.strftime('%Y%m%d%H')}",
         )
