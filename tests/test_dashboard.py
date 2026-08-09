@@ -213,3 +213,68 @@ def test_best_slot_future():
     now = datetime(2026, 8, 3, 8, 0, tzinfo=TZ)
     slot = _best_slot(now)
     assert "03:00" in slot["when"] or "04:30" in slot["when"] or "21:00" in slot["when"]
+
+
+def test_stau_zeitachse_maps_alerts_and_renders():
+    from traffic_monitor.dashboard import build_stau_zeitachse
+    from traffic_monitor.models import Alert
+
+    alerts = [
+        Alert(
+            source="Nakordoni",
+            severity="critical",
+            title="Grenze: Maljevac",
+            detail="lang",
+            location="Maljevac",
+            delay_min=80,
+        ),
+        Alert(
+            source="GPMaljevac",
+            severity="critical",
+            title="Kolaps u Sloveniji",
+            detail="kolone",
+            location="Slowenien",
+        ),
+        Alert(
+            source="autobahn.de",
+            severity="critical",
+            title="A8 | Aichelberg",
+            detail="Kontrolle",
+            location="Stuttgart -> München",
+        ),
+    ]
+    mj = {
+        "to_hr": {
+            "cars": 20,
+            "wait_min": 50,
+            "severity": "critical",
+            "queue_end_visible": False,
+        }
+    }
+    perfect = {
+        "timeline": [
+            {
+                "depart_short": "12:00",
+                "depart_day": "Sun",
+                "arrive_border_short": "12:40",
+                "border_wait_min": 90,
+                "border_cars": 12.0,
+                "load": "voll",
+                "is_best": True,
+                "arrive_buzim_short": "01:00",
+            }
+        ]
+    }
+    axis = build_stau_zeitachse(alerts, maljevac_now=mj, perfect=perfect)
+    by_id = {s["id"]: s for s in axis["segments"]}
+    assert by_id["maljevac"]["severity"] == "critical"
+    assert by_id["karawanken"]["severity"] == "critical"
+    assert by_id["a8"]["severity"] == "critical"
+    assert by_id["buzim"]["severity"] == "clear"
+    assert axis["border_hours"][0]["load"] == "voll"
+
+    html = render_html(_base_payload(stau_zeitachse=axis, perfect=perfect))
+    assert "Stau-Zeitachse" in html
+    assert "axis-corridor" in html
+    assert "Grenze Maljevac nach Abfahrt" in html
+    assert "axis-hour" in html

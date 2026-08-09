@@ -28,6 +28,190 @@ ROUTE_STOPS = [
     ("Waiblingen", "Ziel"),
 ]
 
+# Corridor nodes for the Stau-Zeitachse (id → label/tag + keyword matchers).
+_CORRIDOR_SEGMENTS = (
+    {"id": "buzim", "label": "Bužim", "tag": "Start", "keys": ()},
+    {
+        "id": "maljevac",
+        "label": "Maljevac",
+        "tag": "Grenze",
+        "keys": ("maljevac", "velika kladu", "izači", "izaci", "hak-cam", "hak cam"),
+    },
+    {"id": "zagreb", "label": "Zagreb", "tag": "HR", "keys": ("zagreb",)},
+    {
+        "id": "karawanken",
+        "label": "Karawanken",
+        "tag": "A11 / SI",
+        "keys": ("karawan", "karavan", "a11", "slowen", "sloven", "promet"),
+    },
+    {
+        "id": "tauern",
+        "label": "Tauern",
+        "tag": "A10",
+        "keys": ("tauern", "katschberg", "a10", "villach"),
+    },
+    {
+        "id": "salzburg",
+        "label": "Salzburg",
+        "tag": "AT",
+        "keys": ("salzburg", "walserberg"),
+    },
+    {
+        "id": "a8",
+        "label": "A8 DE",
+        "tag": "DE",
+        "keys": ("autobahn.de", " a8 ", "a8|", "münchen", "munich", "stuttgart"),
+    },
+    {"id": "waiblingen", "label": "Waiblingen", "tag": "Ziel", "keys": ()},
+)
+
+_SEV_RANK = {"clear": 0, "info": 1, "warning": 2, "critical": 3}
+
+
+_SEV_RANK = {"clear": 0, "info": 1, "warning": 2, "critical": 3}
+
+
+def _alert_blob(alert: Alert | dict) -> str:
+    if isinstance(alert, Alert):
+        return f"{alert.source} {alert.title} {alert.detail} {alert.location}".lower()
+    return (
+        f"{alert.get('source','')} {alert.get('title','')} "
+        f"{alert.get('detail','')} {alert.get('location','')}"
+    ).lower()
+
+
+def _worst_sev(*sevs: str | None) -> str:
+    best = "clear"
+    for s in sevs:
+        key = (s or "clear").lower()
+        if key == "info":
+            key = "clear"
+        if _SEV_RANK.get(key, 0) > _SEV_RANK.get(best, 0):
+            best = key
+    return best
+
+
+def build_stau_zeitachse(
+    alerts: list[Alert] | list[dict],
+    *,
+    maljevac_now: dict | None = None,
+    perfect: dict | None = None,
+) -> dict:
+    """Corridor jam map (now) + Maljevac border hours from perfect.timeline."""
+    buckets: dict[str, dict] = {
+        seg["id"]: {
+            "id": seg["id"],
+            "label": seg["label"],
+            "tag": seg["tag"],
+            "severity": "clear",
+            "delay_min": None,
+            "summary": "Ruhig",
+            "sources": [],
+            "alert_count": 0,
+        }
+        for seg in _CORRIDOR_SEGMENTS
+    }
+
+    for alert in alerts:
+        if isinstance(alert, Alert):
+            sev = alert.severity
+            title = alert.title
+            source = alert.source
+            delay = alert.delay_min
+            loc = alert.location or ""
+        else:
+            sev = alert.get("severity") or "info"
+            title = alert.get("title") or ""
+            source = alert.get("source") or ""
+            delay = alert.get("delay_min")
+            loc = alert.get("location") or ""
+        if title == "Quelle nicht erreichbar":
+            continue
+        if sev not in {"warning", "critical"}:
+            continue
+        text = _alert_blob(alert)
+        matched = False
+        for seg in _CORRIDOR_SEGMENTS:
+            keys = seg["keys"]
+            if not keys:
+                continue
+            if any(k in text for k in keys):
+                b = buckets[seg["id"]]
+                b["severity"] = _worst_sev(b["severity"], sev)
+                b["alert_count"] += 1
+                if source and source not in b["sources"]:
+                    b["sources"].append(source)
+                if delay is not None:
+                    b["delay_min"] = max(int(delay), int(b["delay_min"] or 0))
+                if b["summary"] in ("Ruhig", "", None) or not matched:
+                    snippet = (loc or title)[:72]
+                    b["summary"] = snippet or "Störung gemeldet"
+                matched = True
+
+        # Generic Slowenien / GPMaljevac Balkan without precise keyword → Karawanken corridor
+        if not matched and ("slowen" in text or "sloven" in text or "balkan" in text):
+            b = buckets["karawanken"]
+            b["severity"] = _worst_sev(b["severity"], sev)
+            b["alert_count"] += 1
+            if source and source not in b["sources"]:
+                b["sources"].append(source)
+            if b["summary"] in ("Ruhig", "", None):
+                b["summary"] = (loc or title)[:72] or "Störung Slowenien"
+
+    # Overlay live HAK Maljevac (return = BiH→HR primary)
+    mj = maljevac_now or {}
+    side = mj.get("to_hr") or mj
+    if side and side.get("cars") is not None:
+        b = buckets["maljevac"]
+        cars = side.get("cars")
+        wait = side.get("wait_min")
+        cam_sev = side.get("severity") or "info"
+        if side.get("queue_end_visible") is False:
+            cam_sev = "critical"
+        elif cars is not None and cars > 6:
+            cam_sev = _worst_sev(cam_sev, "warning")
+        elif wait is not None and wait >= 45:
+            cam_sev = "critical"
+        elif wait is not None and wait >= 20:
+            cam_sev = _worst_sev(cam_sev, "warning")
+        b["severity"] = _worst_sev(b["severity"], cam_sev)
+        if wait is not None:
+            b["delay_min"] = max(int(wait), int(b["delay_min"] or 0))
+        b["summary"] = f"Live ~{cars} Autos" + (f" · ~{wait} min" if wait is not None else "")
+        if "HAK-Cam" not in b["sources"]:
+            b["sources"].append("HAK-Cam")
+        b["alert_count"] = max(b["alert_count"], 1)
+
+    for b in buckets.values():
+        if b["severity"] == "clear" and b["alert_count"] == 0:
+            b["summary"] = "Ruhig"
+        elif b["severity"] != "clear" and b["summary"] in ("Ruhig", "", None):
+            b["summary"] = "Störung gemeldet"
+        elif b["delay_min"] is not None and "min" not in (b["summary"] or "").lower():
+            b["summary"] = f"{b['summary']} · ~{b['delay_min']} min"
+
+    border_hours = []
+    timeline = (perfect or {}).get("timeline") or []
+    for t in timeline[:20]:
+        border_hours.append(
+            {
+                "depart_short": t.get("depart_short"),
+                "depart_day": t.get("depart_day"),
+                "depart": t.get("depart"),
+                "arrive_border_short": t.get("arrive_border_short"),
+                "border_wait_min": t.get("border_wait_min"),
+                "border_cars": t.get("border_cars"),
+                "load": t.get("load") or "ok",
+                "is_best": bool(t.get("is_best")),
+                "arrive_dest_short": t.get("arrive_buzim_short"),
+            }
+        )
+
+    return {
+        "segments": [buckets[s["id"]] for s in _CORRIDOR_SEGMENTS],
+        "border_hours": border_hours,
+    }
+
 
 def build_dashboard_payload(config_path: str | None = None, *, perfect: dict | None = None) -> dict:
     config = load_config(config_path)
@@ -124,6 +308,10 @@ def _payload_from_alerts(
             "to_hr": to_hr,
         }
 
+    stau_zeitachse = build_stau_zeitachse(
+        alerts, maljevac_now=maljevac_now, perfect=perfect
+    )
+
     return {
         "generated_at": now.isoformat(),
         "generated_label": now.strftime("%d.%m.%Y %H:%M"),
@@ -140,6 +328,7 @@ def _payload_from_alerts(
         "best_departure": best,
         "perfect": perfect,
         "stops": ROUTE_STOPS,
+        "stau_zeitachse": stau_zeitachse,
         "maljevac_now": maljevac_now,
         "borders": borders,
         "cameras": cameras,
@@ -358,6 +547,7 @@ def render_html(payload: dict) -> str:
     )
     perfect_html = _perfect_section(payload.get("perfect"))
     border_html = _border_section(payload.get("maljevac_now"), payload.get("borders") or [])
+    stau_html = _stau_zeitachse_section(payload.get("stau_zeitachse"))
     # Strip perfect blob from embedded JSON? Keep it — useful for clients.
     payload_json = html.escape(json.dumps(payload, ensure_ascii=False), quote=True)
 
@@ -849,6 +1039,107 @@ def render_html(payload: dict) -> str:
       list-style: none; margin: 0; padding: 0;
       display: grid; gap: 0;
     }}
+
+    .stau-axis {{
+      margin-top: 18px;
+      border-radius: calc(var(--radius) + 4px);
+      padding: 18px 16px 16px;
+      background:
+        radial-gradient(800px 280px at 0% 0%, rgba(180,55,45,0.10), transparent 55%),
+        linear-gradient(160deg, #fffaf0 0%, #f3efe4 100%);
+      border: 1px solid rgba(215,199,161,0.75);
+    }}
+    .stau-axis h2 {{ margin: 0 0 4px; }}
+    .axis-sub {{
+      margin: 18px 0 4px;
+      font-size: 1rem;
+    }}
+    .axis-corridor {{
+      list-style: none; margin: 0; padding: 0;
+      display: grid; gap: 0;
+    }}
+    .axis-seg {{
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 10px 0;
+      position: relative;
+    }}
+    .axis-seg:not(:last-child)::before {{
+      content: "";
+      position: absolute;
+      left: 7px; top: 28px; bottom: -2px;
+      width: 2px;
+      background: rgba(20,35,31,0.12);
+    }}
+    .axis-dot {{
+      width: 14px; height: 14px; margin-top: 4px;
+      border-radius: 50%;
+      background: #0f6b4c;
+      box-shadow: 0 0 0 3px rgba(15,107,76,0.15);
+    }}
+    .axis-seg.sev-warning .axis-dot {{
+      background: var(--warning);
+      box-shadow: 0 0 0 3px rgba(181,71,8,0.18);
+    }}
+    .axis-seg.sev-critical .axis-dot {{
+      background: var(--critical);
+      box-shadow: 0 0 0 3px rgba(180,35,24,0.18);
+    }}
+    .axis-top {{
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }}
+    .axis-top strong {{
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.05rem;
+    }}
+    .axis-tag {{ color: var(--muted); font-size: 0.72rem; font-weight: 700; }}
+    .axis-pill {{
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 0.03em;
+      text-transform: uppercase;
+      padding: 3px 8px; border-radius: 999px;
+      background: #ddece7; color: var(--clear);
+    }}
+    .axis-seg.sev-warning .axis-pill {{ background: #fce7c8; color: var(--warning); }}
+    .axis-seg.sev-critical .axis-pill {{ background: #f8d7d4; color: var(--critical); }}
+    .axis-sum {{
+      margin: 4px 0 0; color: var(--muted);
+      font-size: 0.86rem; line-height: 1.35;
+    }}
+    .axis-hours {{
+      list-style: none; margin: 0; padding: 4px 0 0;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(88px, 1fr);
+      gap: 8px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }}
+    .axis-hour {{
+      scroll-snap-align: start;
+      background: #fffaf0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 8px;
+      text-align: center;
+      min-height: 92px;
+    }}
+    .axis-hour.best {{
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 2px rgba(31,107,87,0.16);
+      background: #e8f3ee;
+    }}
+    .ah-when {{ display: block; font-weight: 800; font-size: 0.88rem; }}
+    .ah-bar {{
+      display: block; height: 6px; border-radius: 999px;
+      margin: 8px auto; width: 70%; background: #c8d9d1;
+    }}
+    .axis-hour.load-frei .ah-bar {{ background: linear-gradient(90deg, #1f6b57, #6dffb0); }}
+    .axis-hour.load-ok .ah-bar {{ background: linear-gradient(90deg, #c47a12, #f0c56d); }}
+    .axis-hour.load-voll .ah-bar {{ background: linear-gradient(90deg, #b42318, #ff8f86); }}
+    .ah-meta {{ display: block; font-size: 0.68rem; color: var(--muted); line-height: 1.3; }}
     .stops li {{
       display: grid;
       grid-template-columns: 16px 1fr auto;
@@ -1188,6 +1479,8 @@ def render_html(payload: dict) -> str:
 
     {perfect_html}
 
+    {stau_html}
+
     {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Bild live ~alle 10s · KI-Zählung ~alle 20 Min · Tippen vergrößert das aktuelle Live-Bild</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
 
     <section aria-labelledby="route-title">
@@ -1466,6 +1759,62 @@ def _worst_queue_sev(*sides: dict | None) -> str:
         if rank[key] > rank[worst]:
             worst = key
     return worst
+
+
+def _stau_zeitachse_section(stau: dict | None) -> str:
+    """Vertical corridor jam map + hourly Maljevac border strip."""
+    if not stau:
+        return ""
+    segments = stau.get("segments") or []
+    hours = stau.get("border_hours") or []
+    if not segments and not hours:
+        return ""
+
+    sev_label = {"critical": "Stau", "warning": "Erhöht", "clear": "Frei", "info": "Frei"}
+    seg_html = "".join(
+        f"""
+        <li class="axis-seg sev-{html.escape(s.get('severity') or 'clear')}">
+          <span class="axis-dot" aria-hidden="true"></span>
+          <div class="axis-body">
+            <div class="axis-top">
+              <strong>{html.escape(s.get('label') or '')}</strong>
+              <span class="axis-tag">{html.escape(s.get('tag') or '')}</span>
+              <span class="axis-pill">{html.escape(sev_label.get(s.get('severity') or 'clear', 'Frei'))}</span>
+            </div>
+            <p class="axis-sum">{html.escape(s.get('summary') or 'Ruhig')}</p>
+          </div>
+        </li>
+        """
+        for s in segments
+    )
+
+    hour_html = "".join(
+        f"""
+        <li class="axis-hour load-{html.escape(h.get('load') or 'ok')}{' best' if h.get('is_best') else ''}">
+          <span class="ah-when">{html.escape(str(h.get('depart_day') or ''))} {html.escape(str(h.get('depart_short') or ''))}</span>
+          <span class="ah-bar" aria-hidden="true"></span>
+          <span class="ah-meta">Grenze {html.escape(str(h.get('arrive_border_short') or '—'))}<br/>~{h.get('border_wait_min', '—')}m · ~{h.get('border_cars', '—')}A</span>
+        </li>
+        """
+        for h in hours
+    )
+
+    hours_block = ""
+    if hour_html:
+        hours_block = f"""
+        <h3 class="axis-sub">Grenze Maljevac nach Abfahrt</h3>
+        <p class="empty" style="margin:0 0 10px">Wann du losfährst → wie voll die Grenze dann ist (Forecast).</p>
+        <ol class="axis-hours">{hour_html}</ol>
+        """
+
+    return f"""
+    <section class="stau-axis" aria-labelledby="stau-axis-title">
+      <h2 id="stau-axis-title">Stau-Zeitachse</h2>
+      <p class="empty" style="margin:0 0 12px">Wo jetzt Stau ist auf Bužim → Waiblingen · rot = kritisch, orange = erhöht</p>
+      <ol class="axis-corridor">{seg_html}</ol>
+      {hours_block}
+    </section>
+    """
 
 
 def _border_section(maljevac_now: dict | None, borders: list[dict]) -> str:
