@@ -35,7 +35,7 @@ OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 _SEV_RANK = {"clear": 0, "info": 0, "warning": 1, "critical": 2}
 
 # Bump when vision prompt / post-processing / model cadence / image source changes.
-_PROMPT_VERSION = 18
+_PROMPT_VERSION = 19
 
 # Reuse OpenAI vision results ~20 min so scheduled runs do not re-upload JPEGs every cycle.
 _CACHE_TTL_SEC = 20 * 60
@@ -88,6 +88,7 @@ def cameras_from_config(config: dict) -> list[dict]:
     hak = config.get("hak_cameras") or {}
     cams = hak.get("cams") or []
     image_base = str(hak.get("image_base") or HAK_IMAGE_BASE).rstrip("/")
+    default_page = str(hak.get("page") or HAK_MOBILE_PAGE)
     out: list[dict] = []
     for cam in cams:
         cam_id = cam.get("id")
@@ -101,7 +102,7 @@ def cameras_from_config(config: dict) -> list[dict]:
                 "relevant": bool(cam.get("relevant", False)),
                 "role": str(cam.get("role") or ""),
                 "image_url": f"{image_base}/{cam_id}.jpg",
-                "page_url": str(hak.get("page") or HAK_MOBILE_PAGE),
+                "page_url": str(cam.get("page") or default_page),
             }
         )
     return out
@@ -248,6 +249,7 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
             name = str(cam.get("name") or f"HAK Kamera {cam_id}")
             direction = cam.get("direction", "")
             hint = str(cam.get("count_hint") or "")
+            cam_page = str(cam.get("page") or page)
             try:
                 image = _download_image(
                     client, cam_id, image_url=f"{image_base}/{cam_id}.jpg"
@@ -307,12 +309,12 @@ def fetch_hak_cameras(config: dict) -> list[Alert]:
                     title=f"Kamera: {name}",
                     detail=" | ".join(detail_bits),
                     location=name,
-                    url=page,
+                    url=cam_page,
                     event_id=f"hakcam:{cam_id}:{severity}:{(wait or 0) // 15}",
                     delay_min=wait,
                     extras={
                         "image_url": f"{image_base}/{cam_id}.jpg",
-                        "page_url": page,
+                        "page_url": cam_page,
                         "direction": str(cam.get("direction") or ""),
                         "cam_id": cam_id,
                         "role": str(cam.get("role") or ""),
@@ -359,6 +361,21 @@ def maljevac_cam_wait_min(alerts: list[Alert]) -> int | None:
                 continue
             if "maljevac" in f"{alert.title} {alert.location}".lower():
                 waits.append(int(alert.delay_min))
+    return max(waits) if waits else None
+
+
+def lucko_cam_wait_min(alerts: list[Alert]) -> int | None:
+    """Best live wait at Lučko toll (Ulaz → Zagreb) from HAK cameras."""
+    waits: list[int] = []
+    for alert in alerts:
+        if alert.source != "HAK-Cam" or alert.delay_min is None:
+            continue
+        role = str(alert.extras.get("role") or "").lower()
+        blob = f"{alert.title} {alert.location} {alert.extras.get('direction', '')}".lower()
+        if role == "lucko_exit":
+            continue
+        if role.startswith("lucko") or "lučko" in blob or "lucko" in blob:
+            waits.append(int(alert.delay_min))
     return max(waits) if waits else None
 
 

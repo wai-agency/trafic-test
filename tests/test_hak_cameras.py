@@ -381,6 +381,39 @@ def test_maljevac_cam_wait_prefers_return_direction():
     assert hc.maljevac_cam_wait_min(alerts) == 10
 
 
+def test_lucko_cam_wait_uses_entry_cams():
+    alerts = [
+        Alert(
+            source="HAK-Cam",
+            severity="warning",
+            title="Kamera: Lučko — Ulaz +1 km (Richtung Zagreb)",
+            detail="x",
+            location="Lučko — Ulaz +1 km (Richtung Zagreb)",
+            delay_min=25,
+            extras={"role": "lucko_entry", "direction": "Ulaz→Zagreb"},
+        ),
+        Alert(
+            source="HAK-Cam",
+            severity="critical",
+            title="Kamera: Lučko — Izlaz",
+            detail="x",
+            location="Lučko — Izlaz",
+            delay_min=90,
+            extras={"role": "lucko_exit", "direction": "Izlaz"},
+        ),
+        Alert(
+            source="HAK-Cam",
+            severity="warning",
+            title="Kamera: Lučko — Ulaz +500 m",
+            detail="x",
+            location="Lučko — Ulaz +500 m",
+            delay_min=40,
+            extras={"role": "lucko_entry"},
+        ),
+    ]
+    assert hc.lucko_cam_wait_min(alerts) == 40
+
+
 def test_cameras_from_config():
     cams = hc.cameras_from_config(CONFIG)
     assert [c["id"] for c in cams] == [429, 430]
@@ -389,6 +422,25 @@ def test_cameras_from_config():
     assert cams[1]["role"] == "to_bih"
     assert cams[0]["image_url"].endswith("/429.jpg")
     assert "www.hak.hr/info/kamere" in cams[0]["image_url"]
+
+
+def test_cameras_from_config_lucko_page():
+    cfg = {
+        "hak_cameras": {
+            "page": "https://m.hak.hr/kamera.asp?g=2&k=177",
+            "cams": [
+                {
+                    "id": 728,
+                    "name": "Lučko — Ulaz +1 km",
+                    "role": "lucko_entry",
+                    "relevant": True,
+                    "page": "https://m.hak.hr/kamera.asp?g=1&k=15",
+                }
+            ],
+        }
+    }
+    cams = hc.cameras_from_config(cfg)
+    assert cams[0]["page_url"] == "https://m.hak.hr/kamera.asp?g=1&k=15"
 
 
 def test_dashboard_embeds_cameras():
@@ -429,9 +481,9 @@ def test_dashboard_embeds_cameras():
     assert mj["cars"] == 7
 
     html_out = render_html(payload)
-    assert "Grenz-Kameras" in html_out
+    assert "Kameras (HAK, live)" in html_out
     assert "https://www.hak.hr/info/kamere/430.jpg" in html_out
-    assert "https://m.hak.hr/kamera.asp" in html_out or "Grenz-Kameras" in html_out
+    assert "https://m.hak.hr/kamera.asp" in html_out or "Kameras" in html_out
     assert "Eure Richtung (BiH → HR)" in html_out
     assert "Gegenrichtung (HR → BiH)" in html_out
     assert "data-cam=" in html_out
@@ -453,3 +505,65 @@ def test_dashboard_embeds_cameras():
         src, live, snap = m.group(1), m.group(2), m.group(3)
         assert "www.hak.hr/info/kamere" in live
         assert src == live or (snap and src == snap)
+
+
+def test_dashboard_embeds_lucko():
+    cfg = {
+        "hak_cameras": {
+            "page": "https://m.hak.hr/kamera.asp?g=2&k=177",
+            "cams": [
+                {
+                    "id": 429,
+                    "name": "Maljevac — Einreise BiH → HR",
+                    "direction": "BiH->HR",
+                    "relevant": True,
+                    "role": "to_hr",
+                },
+                {
+                    "id": 728,
+                    "name": "Lučko — Ulaz +1 km",
+                    "direction": "Ulaz→Zagreb",
+                    "relevant": True,
+                    "role": "lucko_entry",
+                    "page": "https://m.hak.hr/kamera.asp?g=1&k=15",
+                },
+                {
+                    "id": 31,
+                    "name": "Lučko — Ulaz (Kabinen)",
+                    "direction": "Ulaz→Zagreb",
+                    "relevant": True,
+                    "role": "lucko_entry",
+                    "page": "https://m.hak.hr/kamera.asp?g=1&k=15",
+                },
+            ],
+        }
+    }
+    alerts = [
+        Alert(
+            source="HAK-Cam",
+            severity="warning",
+            title="Kamera: Maljevac — Einreise BiH → HR",
+            detail="ok",
+            location="Maljevac — Einreise BiH → HR",
+            delay_min=10,
+            extras={"vehicles": 4, "role": "to_hr"},
+        ),
+        Alert(
+            source="HAK-Cam",
+            severity="critical",
+            title="Kamera: Lučko — Ulaz +1 km",
+            detail="stau",
+            location="Lučko — Ulaz +1 km",
+            delay_min=45,
+            extras={"vehicles": 20, "role": "lucko_entry", "queue_end_visible": False},
+        ),
+    ]
+    payload = _payload_from_alerts(cfg, alerts)
+    assert payload["lucko_now"] is not None
+    assert payload["lucko_now"]["wait_min"] == 45
+    assert payload["lucko_now"]["entry"]["cars"] == 20
+    lucko_seg = next(s for s in payload["stau_zeitachse"]["segments"] if s["id"] == "lucko")
+    assert lucko_seg["severity"] == "critical"
+    html = render_html(payload)
+    assert "Lučko jetzt" in html
+    assert "728" in html or "Ulaz +1" in html

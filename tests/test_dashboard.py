@@ -271,6 +271,7 @@ def test_stau_zeitachse_maps_alerts_and_renders():
     assert by_id["karawanken"]["severity"] == "critical"
     assert by_id["a8"]["severity"] == "critical"
     assert by_id["buzim"]["severity"] == "clear"
+    assert by_id["lucko"]["severity"] == "clear"
     assert axis["border_hours"][0]["load"] == "voll"
 
     html = render_html(_base_payload(stau_zeitachse=axis, perfect=perfect))
@@ -278,3 +279,45 @@ def test_stau_zeitachse_maps_alerts_and_renders():
     assert "axis-corridor" in html
     assert "Grenze Maljevac nach Abfahrt" in html
     assert "axis-hour" in html
+
+
+def test_stau_zeitachse_overlays_lucko():
+    from traffic_monitor.dashboard import build_stau_zeitachse
+
+    axis = build_stau_zeitachse(
+        [],
+        lucko_now={
+            "entry": {
+                "cars": 18,
+                "wait_min": 35,
+                "severity": "warning",
+                "queue_end_visible": True,
+            }
+        },
+    )
+    by_id = {s["id"]: s for s in axis["segments"]}
+    assert by_id["lucko"]["severity"] == "warning"
+    assert by_id["lucko"]["delay_min"] == 35
+    assert "18" in by_id["lucko"]["summary"]
+
+
+def test_render_html_lucko_section():
+    html = render_html(
+        _base_payload(
+            lucko_now={
+                "name": "Lučko",
+                "source": "HAK-Cam · gpt-5.6-terra",
+                "entry": {
+                    "name": "Lučko — Ulaz +1 km",
+                    "cars": 12,
+                    "wait_min": 28,
+                    "severity": "warning",
+                    "note": "Kolonne vor Maut",
+                },
+            }
+        )
+    )
+    assert "Lučko jetzt" in html
+    assert "12" in html
+    assert "28" in html
+    assert "A1" in html

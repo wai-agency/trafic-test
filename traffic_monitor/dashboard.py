@@ -21,6 +21,7 @@ console = Console()
 ROUTE_STOPS = [
     ("Bužim", "Start"),
     ("Maljevac", "Grenze"),
+    ("Lučko", "A1 Maut"),
     ("Zagreb", "HR"),
     ("Karawanken", "A11"),
     ("Tauern", "A10"),
@@ -35,7 +36,13 @@ _CORRIDOR_SEGMENTS = (
         "id": "maljevac",
         "label": "Maljevac",
         "tag": "Grenze",
-        "keys": ("maljevac", "velika kladu", "izači", "izaci", "hak-cam", "hak cam"),
+        "keys": ("maljevac", "velika kladu", "izači", "izaci"),
+    },
+    {
+        "id": "lucko",
+        "label": "Lučko",
+        "tag": "A1 Maut",
+        "keys": ("lučko", "lucko"),
     },
     {"id": "zagreb", "label": "Zagreb", "tag": "HR", "keys": ("zagreb",)},
     {
@@ -68,9 +75,6 @@ _CORRIDOR_SEGMENTS = (
 _SEV_RANK = {"clear": 0, "info": 1, "warning": 2, "critical": 3}
 
 
-_SEV_RANK = {"clear": 0, "info": 1, "warning": 2, "critical": 3}
-
-
 def _alert_blob(alert: Alert | dict) -> str:
     if isinstance(alert, Alert):
         return f"{alert.source} {alert.title} {alert.detail} {alert.location}".lower()
@@ -95,6 +99,7 @@ def build_stau_zeitachse(
     alerts: list[Alert] | list[dict],
     *,
     maljevac_now: dict | None = None,
+    lucko_now: dict | None = None,
     perfect: dict | None = None,
 ) -> dict:
     """Corridor jam map (now) + Maljevac border hours from perfect.timeline."""
@@ -158,11 +163,10 @@ def build_stau_zeitachse(
             if b["summary"] in ("Ruhig", "", None):
                 b["summary"] = (loc or title)[:72] or "Störung Slowenien"
 
-    # Overlay live HAK Maljevac (return = BiH→HR primary)
-    mj = maljevac_now or {}
-    side = mj.get("to_hr") or mj
-    if side and side.get("cars") is not None:
-        b = buckets["maljevac"]
+    def _overlay_cam(bucket_id: str, side: dict | None, *, label: str) -> None:
+        if not side or side.get("cars") is None:
+            return
+        b = buckets[bucket_id]
         cars = side.get("cars")
         wait = side.get("wait_min")
         cam_sev = side.get("severity") or "info"
@@ -177,10 +181,18 @@ def build_stau_zeitachse(
         b["severity"] = _worst_sev(b["severity"], cam_sev)
         if wait is not None:
             b["delay_min"] = max(int(wait), int(b["delay_min"] or 0))
-        b["summary"] = f"Live ~{cars} Autos" + (f" · ~{wait} min" if wait is not None else "")
+        b["summary"] = f"{label} ~{cars} Autos" + (f" · ~{wait} min" if wait is not None else "")
         if "HAK-Cam" not in b["sources"]:
             b["sources"].append("HAK-Cam")
         b["alert_count"] = max(b["alert_count"], 1)
+
+    # Overlay live HAK Maljevac (return = BiH→HR primary)
+    mj = maljevac_now or {}
+    _overlay_cam("maljevac", mj.get("to_hr") or mj, label="Live")
+
+    # Overlay live Lučko Ulaz (worst analyzed entry cam)
+    lk = lucko_now or {}
+    _overlay_cam("lucko", lk.get("entry") or lk, label="Live")
 
     for b in buckets.values():
         if b["severity"] == "clear" and b["alert_count"] == 0:
@@ -308,8 +320,52 @@ def _payload_from_alerts(
             "to_hr": to_hr,
         }
 
+    lucko_cams = [
+        c
+        for c in cameras
+        if (c.get("role") or "").startswith("lucko")
+        or "lučko" in (c.get("name") or "").lower()
+        or "lucko" in (c.get("name") or "").lower()
+    ]
+    lucko_entry = None
+    for c in lucko_cams:
+        if (c.get("role") or "") == "lucko_exit":
+            continue
+        if c.get("vehicles") is None and c.get("wait_min") is None:
+            continue
+        cand = {
+            "name": c.get("name"),
+            "direction": c.get("direction"),
+            "cars": c.get("vehicles"),
+            "wait_min": c.get("wait_min"),
+            "trucks": c.get("trucks"),
+            "severity": c.get("severity"),
+            "note": (c.get("verdict") or "")[:140],
+            "cam_id": c.get("id"),
+            "queue_end_visible": c.get("queue_end_visible"),
+        }
+        if lucko_entry is None:
+            lucko_entry = cand
+            continue
+        # Prefer worst wait among analyzed Ulaz cams
+        prev = lucko_entry.get("wait_min") or 0
+        cur = cand.get("wait_min") or 0
+        if cur >= prev:
+            lucko_entry = cand
+    lucko_now = None
+    if lucko_entry:
+        lucko_now = {
+            "name": "Lučko",
+            "source": "HAK-Cam · gpt-5.6-terra",
+            "cars": lucko_entry.get("cars"),
+            "wait_min": lucko_entry.get("wait_min"),
+            "trucks": lucko_entry.get("trucks"),
+            "note": "A1 Maut vor Zagreb · Ulaz Richtung Zagreb",
+            "entry": lucko_entry,
+        }
+
     stau_zeitachse = build_stau_zeitachse(
-        alerts, maljevac_now=maljevac_now, perfect=perfect
+        alerts, maljevac_now=maljevac_now, lucko_now=lucko_now, perfect=perfect
     )
 
     return {
@@ -330,6 +386,7 @@ def _payload_from_alerts(
         "stops": ROUTE_STOPS,
         "stau_zeitachse": stau_zeitachse,
         "maljevac_now": maljevac_now,
+        "lucko_now": lucko_now,
         "borders": borders,
         "cameras": cameras,
         "alerts": [
@@ -547,6 +604,7 @@ def render_html(payload: dict) -> str:
     )
     perfect_html = _perfect_section(payload.get("perfect"))
     border_html = _border_section(payload.get("maljevac_now"), payload.get("borders") or [])
+    lucko_html = _lucko_section(payload.get("lucko_now"))
     stau_html = _stau_zeitachse_section(payload.get("stau_zeitachse"))
     # Strip perfect blob from embedded JSON? Keep it — useful for clients.
     payload_json = html.escape(json.dumps(payload, ensure_ascii=False), quote=True)
@@ -1420,6 +1478,7 @@ def render_html(payload: dict) -> str:
     .stops li:nth-child(5) {{ animation-delay: 0.25s; }}
     .stops li:nth-child(6) {{ animation-delay: 0.3s; }}
     .stops li:nth-child(7) {{ animation-delay: 0.35s; }}
+    .stops li:nth-child(8) {{ animation-delay: 0.4s; }}
     .tl-item:nth-child(1) {{ animation-delay: 0.05s; }}
     .tl-item:nth-child(2) {{ animation-delay: 0.1s; }}
     .tl-item:nth-child(3) {{ animation-delay: 0.15s; }}
@@ -1477,11 +1536,13 @@ def render_html(payload: dict) -> str:
 
     {border_html}
 
+    {lucko_html}
+
     {perfect_html}
 
     {stau_html}
 
-    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Grenz-Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac / Velika Kladuša · Bild live ~alle 10s · KI-Zählung ~alle 20 Min · Tippen vergrößert das aktuelle Live-Bild</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
+    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac + Lučko (A1) · Bild live ~alle 10s · KI-Zählung ~alle 20 Min · Tippen vergrößert</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
 
     <section aria-labelledby="route-title">
       <h2 id="route-title">Route</h2>
@@ -1813,6 +1874,47 @@ def _stau_zeitachse_section(stau: dict | None) -> str:
       <p class="empty" style="margin:0 0 12px">Wo jetzt Stau ist auf Bužim → Waiblingen · rot = kritisch, orange = erhöht</p>
       <ol class="axis-corridor">{seg_html}</ol>
       {hours_block}
+    </section>
+    """
+
+
+def _lucko_section(lucko_now: dict | None) -> str:
+    """Compact Lučko toll status — used for jam avoidance near Zagreb."""
+    if not lucko_now:
+        return """
+    <section class="border-now" aria-labelledby="lucko-title">
+      <h2 id="lucko-title">Lučko jetzt (A1 Maut)</h2>
+      <p class="empty">Noch keine KI-Zählung. Nächster Monitor-Lauf wertet Ulaz-Cams 728/983 aus (~alle 20 Min).</p>
+    </section>
+    """
+    entry = lucko_now.get("entry") or lucko_now
+    sev = _queue_sev_key(entry)
+    label = _queue_sev_label(sev)
+    cars = entry.get("cars")
+    wait = entry.get("wait_min")
+    trucks = entry.get("trucks")
+    cars_l = "—" if cars is None else str(cars)
+    wait_l = "—" if wait is None else f"~{wait} min"
+    trucks_l = "" if trucks is None else f" · ~{trucks} LKW"
+    end_l = "" if entry.get("queue_end_visible") is not False else " · Ende nicht sichtbar"
+    note = html.escape((entry.get("note") or lucko_now.get("note") or "")[:120])
+    name = html.escape(str(entry.get("name") or "Lučko Ulaz"))
+    source = html.escape(str(lucko_now.get("source") or "HAK-Cam"))
+    return f"""
+    <section class="border-now is-{html.escape(sev)}" aria-labelledby="lucko-title">
+      <h2 id="lucko-title">Lučko jetzt (A1 · Zagreb)</h2>
+      <p class="empty" style="margin:0">Maut vor Zagreb · fließt in Abfahrt-Scoring ein · {source}</p>
+      <div class="border-sides">
+        <div class="border-side sev-{html.escape(sev)}" data-severity="{html.escape(sev)}">
+          <div class="side-head">
+            <span class="side-kicker">{name}</span>
+            <span class="side-sev sev-{html.escape(sev)}">{html.escape(label)}</span>
+          </div>
+          <strong class="side-cars">{html.escape(cars_l)} <small>Autos</small></strong>
+          <span class="side-meta">Wartezeit {html.escape(wait_l)}{html.escape(trucks_l)}{html.escape(end_l)}</span>
+          {"<span class='side-note'>" + note + "</span>" if note else ""}
+        </div>
+      </div>
     </section>
     """
 

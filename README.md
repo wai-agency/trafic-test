@@ -12,7 +12,7 @@ Lokales Stau-/Grenz-Überwachungssystem für die **Rückfahrt Bužim → Waiblin
 - Meiden: Freitag 14–20, Samstag 06–15
 
 ### Beste Route
-**Bužim → Maljevac → Zagreb → SI-A2 → A11 Karawanken → Villach → A10 Tauern → Salzburg → A8 → Waiblingen**
+**Bužim → Maljevac → Lučko/Zagreb → SI-A2 → A11 Karawanken → Villach → A10 Tauern → Salzburg → A8 → Waiblingen**
 
 - OSRM freier Verkehr: ca. **930 km / ~11 h**
 - Realistisch im Sommer: **12–15 h** (+ Stau/Grenze)

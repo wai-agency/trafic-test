@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from traffic_monitor.perfect_depart import advance_perfect_payload, departure_slots
@@ -136,3 +136,37 @@ def test_advance_perfect_keeps_future_best():
     assert out["best"]["depart_short"] == "15:00"
     assert out["advanced"] is False
     assert out["best_low_border"]["depart_short"] == "16:00"
+
+
+def test_score_slot_adds_near_term_lucko_wait(monkeypatch):
+    from traffic_monitor.perfect_depart import score_slot
+    from traffic_monitor.reroute import ROUTES
+
+    monkeypatch.setattr(
+        "traffic_monitor.perfect_depart.osrm_leg_times",
+        lambda _route: (45 * 60, 11 * 3600, 960_000),
+    )
+    now = datetime(2026, 8, 3, 12, 0, tzinfo=TZ)
+    depart = now + timedelta(minutes=30)
+    scored = score_slot(
+        depart,
+        ROUTES["primary"],
+        forecast=[],
+        google_key=None,
+        live_lucko_wait_min=40,
+        now=now,
+    )
+    assert scored is not None
+    assert scored.lucko_wait_min == 40
+    assert "Lučko" in scored.notes
+    # Far departure: live Lučko should not apply (>5h to Lučko)
+    far = score_slot(
+        now + timedelta(hours=12),
+        ROUTES["primary"],
+        forecast=[],
+        google_key=None,
+        live_lucko_wait_min=40,
+        now=now,
+    )
+    assert far is not None
+    assert far.lucko_wait_min == 0

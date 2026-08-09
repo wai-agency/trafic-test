@@ -20,6 +20,31 @@ def test_border_wait_attached_to_maljevac_route():
     assert wait_iz == 0
 
 
+def test_border_wait_adds_lucko_for_zagreb_routes():
+    alerts = [
+        Alert(
+            source="HAK-Cam",
+            severity="warning",
+            title="Kamera: Maljevac — Einreise BiH → HR",
+            detail="x",
+            location="Maljevac — Einreise BiH → HR",
+            delay_min=15,
+            extras={"role": "to_hr"},
+        ),
+        Alert(
+            source="HAK-Cam",
+            severity="critical",
+            title="Kamera: Lučko — Ulaz +1 km",
+            detail="x",
+            location="Lučko — Ulaz +1 km",
+            delay_min=30,
+            extras={"role": "lucko_entry"},
+        ),
+    ]
+    wait = border_wait_for_route(ROUTES["primary"], alerts)
+    assert wait == 45  # Maljevac 15 + Lučko 30
+
+
 def test_candidates_prefer_izacic_when_maljevac_blocked():
     routes = candidate_routes({"maljevac"})
     assert routes[0].id == "border_izacic"

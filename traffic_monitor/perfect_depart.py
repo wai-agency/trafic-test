@@ -32,10 +32,11 @@ class SlotScore:
     distance_m: int
     provider: str
     notes: str = ""
+    lucko_wait_min: int = 0
 
     @property
     def total_sec(self) -> int:
-        return self.drive_sec + self.border_wait_min * 60
+        return self.drive_sec + (self.border_wait_min + self.lucko_wait_min) * 60
 
     def fmt_dur(self, sec: int | None = None) -> str:
         sec = self.total_sec if sec is None else sec
@@ -220,6 +221,7 @@ def score_slot(
     google_key: str | None,
     *,
     live_cam_wait_min: int | None = None,
+    live_lucko_wait_min: int | None = None,
     now: datetime | None = None,
 ) -> SlotScore | None:
     times = None
@@ -235,13 +237,13 @@ def score_slot(
     to_border, drive_total, dist = times
     arrive_border = depart + timedelta(seconds=to_border)
     cars, lo, hi = _forecast_cars_at(forecast, arrive_border)
+    ref = now or datetime.now(TZ)
     # Only apply Maljevac forecast wait to Maljevac routes; for Izačić use live nakordoni if available later
     uses_maljevac = "maljevac" in " ".join(route.labels).lower()
     if uses_maljevac:
         border_wait = _cars_to_wait_min(cars)
         notes = f"Maljevac-Forecast ~{cars:.1f} Autos (Band {lo:.1f}-{hi:.1f}) → ~{border_wait} min"
         # If border arrival is soon, blend in live HAK camera KI wait
-        ref = now or datetime.now(TZ)
         hours_to_border = (arrive_border - ref).total_seconds() / 3600
         if live_cam_wait_min is not None and hours_to_border <= 3:
             blended = max(border_wait, int(live_cam_wait_min))
@@ -252,7 +254,19 @@ def score_slot(
         # Izačić: no separate forecast here; assume similar night pattern but +15% uncertainty
         border_wait = _cars_to_wait_min(cars * 1.05)
         notes = f"Izačić ohne eigenen Forecast; Schätzung analog ~{border_wait} min"
-    arrive_buzim = depart + timedelta(seconds=drive_total + border_wait * 60)
+
+    # Lučko toll after Maljevac (~1.5h): use live wait to avoid Zagreb approach jam
+    lucko_wait = 0
+    if live_lucko_wait_min is not None and live_lucko_wait_min > 0:
+        arrive_lucko = arrive_border + timedelta(minutes=90)
+        hours_to_lucko = (arrive_lucko - ref).total_seconds() / 3600
+        if hours_to_lucko <= 5:
+            lucko_wait = int(live_lucko_wait_min)
+            notes += f" · Lučko live ~{lucko_wait} min (Stau vermeiden)"
+
+    arrive_buzim = depart + timedelta(
+        seconds=drive_total + (border_wait + lucko_wait) * 60
+    )
     return SlotScore(
         depart=depart,
         arrive_buzim=arrive_buzim,
@@ -264,6 +278,7 @@ def score_slot(
         distance_m=dist,
         provider=provider,
         notes=notes,
+        lucko_wait_min=lucko_wait,
     )
 
 
@@ -282,6 +297,7 @@ def _slot_dict(s: SlotScore, *, badge: str | None = None) -> dict:
         "arrive_buzim_short": s.arrive_buzim.strftime("%H:%M"),
         "border_wait_min": s.border_wait_min,
         "border_cars": round(s.border_cars, 1),
+        "lucko_wait_min": s.lucko_wait_min,
         "drive_min": s.drive_sec // 60,
         "total_min": s.total_sec // 60,
         "total_label": s.fmt_dur(),
@@ -310,13 +326,21 @@ def compute_perfect_payload() -> dict:
     slots = departure_slots(now)
 
     live_cam_wait = None
+    live_lucko_wait = None
     try:
         from traffic_monitor.config import load_config
-        from traffic_monitor.sources.hak_cameras import fetch_hak_cameras, maljevac_cam_wait_min
+        from traffic_monitor.sources.hak_cameras import (
+            fetch_hak_cameras,
+            lucko_cam_wait_min,
+            maljevac_cam_wait_min,
+        )
 
-        live_cam_wait = maljevac_cam_wait_min(fetch_hak_cameras(load_config()))
+        cam_alerts = fetch_hak_cameras(load_config())
+        live_cam_wait = maljevac_cam_wait_min(cam_alerts)
+        live_lucko_wait = lucko_cam_wait_min(cam_alerts)
     except Exception:
         live_cam_wait = None
+        live_lucko_wait = None
 
     def _score(dep: datetime, route: RouteOption, *, use_google: bool) -> SlotScore | None:
         return score_slot(
@@ -325,6 +349,7 @@ def compute_perfect_payload() -> dict:
             forecast,
             google_key if use_google else None,
             live_cam_wait_min=live_cam_wait,
+            live_lucko_wait_min=live_lucko_wait,
             now=now,
         )
 

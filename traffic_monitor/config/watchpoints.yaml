@@ -2,7 +2,7 @@
 route:
   from: Bužim
   to: Waiblingen
-  via: "Bužim → Maljevac → Zagreb → SI-A2 → A11 Karawanken → Villach → A10 Tauern → Salzburg → A8 → Waiblingen"
+  via: "Bužim → Maljevac → Lučko/Zagreb → SI-A2 → A11 Karawanken → Villach → A10 Tauern → Salzburg → A8 → Waiblingen"
   approx_km: 960
   free_flow_hours: 11.5
 
@@ -21,6 +21,8 @@ keywords:
     - maljevac
     - izačić
     - izacic
+    - lučko
+    - lucko
     - velika kladuša
     - velika kladusa
     - bužim
@@ -113,6 +115,42 @@ hak_cameras:
       direction: "BiH"
       analyze: false
       relevant: false
+    # Lučko A1 toll (Zagreb approach after Maljevac). Ulaz = queue toward Zagreb.
+    # Mobile group: https://m.hak.hr/kamera.asp?g=1&k=15
+    - id: 728
+      name: "Lučko — Ulaz +1 km (Richtung Zagreb)"
+      direction: "Ulaz→Zagreb"
+      relevant: true
+      analyze: true
+      role: "lucko_entry"
+      page: "https://m.hak.hr/kamera.asp?g=1&k=15"
+      count_hint: >
+        Cam 728 Lučko Ulaz +1km: nur die Kolonne zur Mautstation Richtung Zagreb.
+        Gegenrichtung und Standstreifen ignorieren. Lange Schlange = Stau vor Zagreb.
+    - id: 983
+      name: "Lučko — Ulaz +500 m"
+      direction: "Ulaz→Zagreb"
+      relevant: true
+      analyze: true
+      role: "lucko_entry"
+      page: "https://m.hak.hr/kamera.asp?g=1&k=15"
+      count_hint: >
+        Cam 983 Lučko Ulaz +500m: nur Kolonne zur Maut Richtung Zagreb.
+        Gegenrichtung ignorieren.
+    - id: 31
+      name: "Lučko — Ulaz (Kabinen)"
+      direction: "Ulaz→Zagreb"
+      relevant: true
+      analyze: false
+      role: "lucko_entry"
+      page: "https://m.hak.hr/kamera.asp?g=1&k=15"
+    - id: 32
+      name: "Lučko — Izlaz"
+      direction: "Izlaz"
+      relevant: false
+      analyze: false
+      role: "lucko_exit"
+      page: "https://m.hak.hr/kamera.asp?g=1&k=15"
 
 # Facebook page «Granični prijelaz Maljevac» (same community as gpmaljevac.com).
 # Direct post fetch needs FACEBOOK_PAGE_ACCESS_TOKEN secret; RSS covers portal posts always.

@@ -51,7 +51,7 @@ def candidate_routes(blockers: set[str]) -> list[RouteOption]:
 
 def border_wait_for_route(route: RouteOption, alerts: list[Alert]) -> int:
     """Attach live Nakordoni + HAK-Cam waits to the border used by this candidate."""
-    from traffic_monitor.sources.hak_cameras import maljevac_cam_wait_min
+    from traffic_monitor.sources.hak_cameras import lucko_cam_wait_min, maljevac_cam_wait_min
 
     labels = " ".join(route.labels).lower() + " " + route.id
     waits: dict[str, int] = {}
@@ -70,10 +70,18 @@ def border_wait_for_route(route: RouteOption, alerts: list[Alert]) -> int:
         waits["maljevac"] = max(waits.get("maljevac", 0), cam_wait)
 
     if "izacic" in labels or "izačić" in labels:
-        return waits.get("izacic", 0)
-    if "maljevac" in labels:
-        return waits.get("maljevac", 0)
-    return 0
+        total = waits.get("izacic", 0)
+    elif "maljevac" in labels:
+        total = waits.get("maljevac", 0)
+    else:
+        total = 0
+
+    # All return variants pass Zagreb; Lučko Ulaz is the A1 toll jam before the city.
+    if "zagreb" in labels:
+        lucko = lucko_cam_wait_min(alerts)
+        if lucko is not None:
+            total += lucko
+    return total
 
 
 def score_with_osrm(route: RouteOption) -> LiveRouteResult | None:
