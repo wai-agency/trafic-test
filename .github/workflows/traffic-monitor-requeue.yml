@@ -1,9 +1,10 @@
 # Keeps Traffic Monitor refreshing ~every 20 minutes even when GitHub's
 # schedule cron skips/delays for hours.
 #
-# OPT-IN: only runs when repository variable MONITOR_KEEPALIVE=true
-# and .github/MONITOR_PAUSED is absent on the triggering commit.
-# Set MONITOR_KEEPALIVE=false (or leave unset) to stop the loop.
+# After each successful Traffic Monitor run on main, wait ~19 min and
+# dispatch the next run via workflow_dispatch (allowed with GITHUB_TOKEN).
+# Set repository variable MONITOR_KEEPALIVE=false to stop the loop.
+# Skips when .github/MONITOR_PAUSED is present.
 name: Traffic Monitor Requeue
 
 on:
@@ -24,7 +25,7 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.head_branch == 'main'
-      && vars.MONITOR_KEEPALIVE == 'true'
+      && vars.MONITOR_KEEPALIVE != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

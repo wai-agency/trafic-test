@@ -2,7 +2,7 @@
 
 Lokales Stau-/Grenz-Überwachungssystem für die **Rückfahrt Bužim → Waiblingen** (über Maljevac + Karawanken), plus konkrete Reiseempfehlung.
 
-**Status:** Monitor ist **pausiert** (`.github/MONITOR_PAUSED`) — keine Live-API-Kosten, bis du sagst „starten“.
+**Status:** Monitor ist **aktiv** (Rückfahrt) — Live-Refresh ~alle 20 Min.
 
 ## Reise-Empfehlung (Rückfahrt)
 

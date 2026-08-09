@@ -7,8 +7,8 @@ This repository is a single, self-contained **Python CLI** (`traffic-monitor`, b
 return trip (outbound was Waiblingen → Bužim).
 
 **Pause:** if `.github/MONITOR_PAUSED` exists, GitHub Actions skips live API calls
-(OpenAI/Google/Telegram). Requeue only runs when `MONITOR_KEEPALIVE=true` and the
-pause file is absent. Do not remove the pause file unless the user asks to resume.
+(OpenAI/Google/Telegram). Requeue runs unless `MONITOR_KEEPALIVE=false`. Only add the
+pause file when the user asks to stop monitoring to save API costs.
 There is **no database, message broker, or companion backend service** — the CLI only makes
 outbound HTTPS calls to public third-party APIs and (optionally) serves a static HTML
 dashboard. See `README.md` (German) for the full feature/command reference.

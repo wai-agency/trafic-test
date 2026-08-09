@@ -1,14 +1,17 @@
 # Regular refreshes: cron is best-effort; traffic-monitor-requeue.yml chains the
-# next run ~19 min after each success on main (only if MONITOR_KEEPALIVE=true).
+# next run ~19 min after each success on main (disable via MONITOR_KEEPALIVE=false).
 #
-# PAUSE: if .github/MONITOR_PAUSED exists, skip live API work (no OpenAI/Google
-# burn). Dashboard HTML can still be rebuilt from cache on push.
+# Optional PAUSE: if .github/MONITOR_PAUSED exists, skip live API work
+# (no OpenAI/Google/Telegram burn).
 name: Traffic Monitor
 
 on:
   push:
     branches: [main]
-  # schedule disabled while MONITOR_PAUSED — re-enable when trip monitoring resumes
+  schedule:
+    # Backup cadence if the requeue loop is ever interrupted (~every 20 min).
+    - cron: "7,27,47 * * * *"
+    - cron: "17,37,57 * * * *"
   workflow_dispatch:
     inputs:
       min_severity:
