@@ -75,7 +75,7 @@ docker compose up -d --build
 
 ### In der Cloud ohne PC (GitHub Actions + mobiles Dashboard)
 
-Der Workflow prüft ca. **alle 20 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages. Zuverlässigkeit: GitHub-Cron allein ist unzuverlässig — deshalb startet *Traffic Monitor Requeue* nach jedem erfolgreichen Lauf automatisch den nächsten (~19 Min Pause). Loop stoppen: Repo-Variable `MONITOR_KEEPALIVE=false`. Manuell: Actions → *Traffic Monitor* → *Run workflow*. Das Dashboard lädt HAK-Kamerabilder **live (~alle 10s)** von `www.hak.hr/info/kamere` (HD ~1280×720); OpenAI Vision (gpt-5.6-terra) zählt nur, wenn der Workflow läuft (Cache ~20 Min).
+Der Workflow prüft ca. **alle 20 Minuten**, schickt Telegram-Alerts und deployed ein **mobil-optimiertes Dashboard** auf GitHub Pages. Zuverlässigkeit: GitHub-Cron allein ist unzuverlässig — deshalb startet *Traffic Monitor Requeue* nach jedem erfolgreichen Lauf automatisch den nächsten (~19 Min Pause). Loop stoppen: Repo-Variable `MONITOR_KEEPALIVE=false`. Manuell: Actions → *Traffic Monitor* → *Run workflow*. Das Dashboard lädt Kamerabilder **live (~alle 10s)**: HAK (Maljevac/Lučko, HD ~1280×720) plus **Karawanken-Tunnel** (ASFINAG A11 + DARS Hrušica). OpenAI Vision (gpt-5.6-terra) zählt nur HAK-Kameras, wenn der Workflow läuft (Cache ~20 Min).
 
 1. Secrets (erledigt, wenn gesetzt):  
    https://github.com/wai-agency/trafic-test/settings/secrets/actions  
