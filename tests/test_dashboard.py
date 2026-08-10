@@ -204,9 +204,62 @@ def test_render_html_perfect_block():
     html = render_html(_base_payload(perfect=perfect))
     assert "15:00" in html
     assert "In Google Maps öffnen" in html
-    assert "Freiere Grenze" in html
+    assert "Freiere Grenze" in html or "freiere Grenze" in html
+    assert "früheste Ankunft" in html
+    assert "nicht die leerste Grenze" in html
     assert "Abfahrtsfenster" in html
     assert "perfect-time" in html
+    assert "perfect-goal" in html
+
+
+def test_perfect_explains_high_border_wait():
+    perfect = {
+        "generated_label": "10.08.2026 13:13",
+        "hint": "alt",
+        "best": {
+            "badge": "früheste Ankunft",
+            "depart_label": "Mon 10.08. 14:00",
+            "depart_short": "14:00",
+            "depart_day": "Mon 10.08.",
+            "arrive_border_short": "14:43",
+            "arrive_buzim_short": "02:26",
+            "border_wait_min": 53,
+            "border_cars": 6.6,
+            "total_label": "12h 26min",
+            "distance_km": 967,
+            "route_id": "primary",
+            "maps_url": "https://www.google.com/maps",
+            "stops": ["Bužim", "Maljevac", "Zagreb", "Waiblingen"],
+        },
+        "best_low_border": None,
+        "timeline": [
+            {
+                "depart_day": "Mon",
+                "depart_short": "14:00",
+                "arrive_buzim_short": "02:26",
+                "border_wait_min": 53,
+                "border_cars": 6.6,
+                "load": "voll",
+                "is_best": True,
+            },
+            {
+                "depart_day": "Tue",
+                "depart_short": "03:00",
+                "arrive_buzim_short": "14:49",
+                "border_wait_min": 18,
+                "border_cars": 2.2,
+                "load": "frei",
+                "is_best": False,
+            },
+        ],
+        "top": [],
+    }
+    html = render_html(_base_payload(perfect=perfect))
+    assert "53 min an der Grenze können trotzdem" in html
+    assert "03:00" in html
+    assert "18 min" in html or "~18 min" in html
+    assert "Alternative · freiere Grenze" in html
+    assert "Spart ~35 min an der Grenze" in html
 
 
 def test_best_slot_future():

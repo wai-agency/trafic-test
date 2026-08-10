@@ -472,6 +472,34 @@ def _perfect_section(perfect: dict | None) -> str:
     timeline = perfect.get("timeline") or []
     top = perfect.get("top") or []
 
+    # Fallback: quietest upcoming slot from timeline if best_low_border missing
+    if not alt and timeline:
+        quiet = [
+            t
+            for t in timeline
+            if t.get("border_cars") is not None and float(t["border_cars"]) <= 3.5
+        ]
+        if quiet:
+            pick = min(
+                quiet,
+                key=lambda t: (
+                    t.get("border_wait_min") if t.get("border_wait_min") is not None else 999,
+                    float(t.get("border_cars") or 99),
+                ),
+            )
+            if pick.get("depart_short") != best.get("depart_short"):
+                alt = {
+                    "depart_label": f"{pick.get('depart_day', '')} {pick.get('depart_short', '')}".strip(),
+                    "depart_short": pick.get("depart_short"),
+                    "depart_day": pick.get("depart_day"),
+                    "arrive_buzim_short": pick.get("arrive_buzim_short"),
+                    "arrive_border_short": pick.get("arrive_border_short"),
+                    "border_wait_min": pick.get("border_wait_min"),
+                    "border_cars": pick.get("border_cars"),
+                    "maps_url": best.get("maps_url") or "#",
+                    "badge": "freie Grenze",
+                }
+
     timeline_html = "".join(
         f"""
         <li class="tl-item load-{html.escape(t.get('load', 'ok'))}{' best' if t.get('is_best') else ''}{' night' if t.get('night') else ''}">
@@ -503,17 +531,55 @@ def _perfect_section(perfect: dict | None) -> str:
         for s in top[:6]
     )
 
+    wait = best.get("border_wait_min")
+    badge = best.get("badge") or "früheste Ankunft"
+    goal_bits = [
+        "<strong>Ziel: früheste Ankunft in Waiblingen</strong> — nicht die leerste Grenze."
+    ]
+    if wait is not None and int(wait) >= 40:
+        goal_bits.append(
+            f"~{int(wait)} min an der Grenze können trotzdem „best“ sein: "
+            "Nachts ist Maljevac freier, du kommst aber oft erst Nachmittag an."
+        )
+    if alt:
+        alt_wait = alt.get("border_wait_min")
+        alt_dep = html.escape(
+            str(alt.get("depart_short") or alt.get("depart_label") or "")
+        )
+        alt_arr = html.escape(str(alt.get("arrive_buzim_short") or "—"))
+        goal_bits.append(
+            f"Ruhigere Grenze: <strong>{alt_dep}</strong> "
+            f"(~{alt_wait} min) → Waiblingen {alt_arr}."
+        )
+    goal_html = (
+        '<p class="perfect-goal" id="perfect-goal">'
+        + "<br/>".join(goal_bits)
+        + "</p>"
+    )
+
     alt_html = ""
     if alt:
+        alt_wait = alt.get("border_wait_min")
+        alt_cars = alt.get("border_cars")
+        cars_bit = f" · ~{alt_cars} Autos" if alt_cars is not None else ""
+        save_bit = ""
+        if wait is not None and alt_wait is not None and int(wait) > int(alt_wait):
+            save_bit = (
+                f"<p class='alt-note'>Spart ~{int(wait) - int(alt_wait)} min an der Grenze, "
+                f"Ankunft aber später ({html.escape(str(alt.get('arrive_buzim_short') or '—'))} "
+                f"statt {html.escape(str(best.get('arrive_buzim_short') or '—'))}).</p>"
+            )
         alt_html = f"""
-        <div class="perfect-alt">
-          <div class="alt-kicker">Freiere Grenze</div>
+        <div class="perfect-alt" id="perfect-alt">
+          <div class="alt-kicker">Alternative · freiere Grenze</div>
+          <p class="alt-lead">Wenn du Stau an Maljevac vermeiden willst (später am Ziel).</p>
           <div class="alt-grid">
-            <div><span>Los</span><strong>{html.escape(alt['depart_label'])}</strong></div>
-            <div><span>Grenze</span><strong>~{alt['border_wait_min']} min</strong></div>
-            <div><span>Waiblingen</span><strong>{html.escape(alt['arrive_buzim_short'])}</strong></div>
+            <div><span>Los</span><strong>{html.escape(str(alt.get('depart_label') or alt.get('depart_short') or ''))}</strong></div>
+            <div><span>Grenze</span><strong>~{alt_wait} min{html.escape(cars_bit)}</strong></div>
+            <div><span>Waiblingen</span><strong>{html.escape(str(alt.get('arrive_buzim_short') or '—'))}</strong></div>
           </div>
-          <a class="maps-btn ghost" href="{html.escape(alt['maps_url'])}" target="_blank" rel="noopener">Maps öffnen</a>
+          {save_bit}
+          <a class="maps-btn ghost" href="{html.escape(str(alt.get('maps_url') or best.get('maps_url') or '#'))}" target="_blank" rel="noopener">Maps öffnen</a>
         </div>
         """
 
@@ -529,10 +595,12 @@ def _perfect_section(perfect: dict | None) -> str:
         <span class="perfect-stamp">Live · {html.escape(perfect.get('generated_label', ''))}</span>
       </div>
 
+      {goal_html}
+
       <div class="perfect-hero" id="perfect-hero" data-perfect-root>
-        <p class="perfect-kicker">Bužim → Waiblingen · Rückfahrt</p>
+        <p class="perfect-kicker">Bužim → Waiblingen · früheste Ankunft</p>
         <p class="perfect-time" id="perfect-time">{html.escape(best['depart_short'])}</p>
-        <p class="perfect-day" id="perfect-day">{html.escape(best['depart_day'])} · {html.escape(best.get('badge') or 'Empfehlung')}</p>
+        <p class="perfect-day" id="perfect-day">{html.escape(best['depart_day'])} · {html.escape(badge)}</p>
 
         <ol class="journey" aria-label="Reisezeitlinie">
           <li>
@@ -570,14 +638,14 @@ def _perfect_section(perfect: dict | None) -> str:
       <div class="perfect-timeline-wrap">
         <h3>Abfahrtsfenster (Hauptroute)</h3>
         <p class="empty" style="margin:0 0 10px">
-          Inkl. Nacht 00–05 · Update alle ~{html.escape(str(perfect.get('refresh_minutes') or 30))} Min
+          Farbe = Grenzlast (frei/ok/voll) · Nacht 00–05 · Update alle ~{html.escape(str(perfect.get('refresh_minutes') or 30))} Min
           · {len(timeline)} Slots
         </p>
         <ol class="timeline">{timeline_html or '<li class="empty">Keine Slots</li>'}</ol>
       </div>
 
       <div class="perfect-slots-wrap">
-        <h3>Top Alternativen</h3>
+        <h3>Top Alternativen (früheste Ankunft)</h3>
         <ol class="slot-list">{top_html}</ol>
       </div>
     </section>
@@ -840,6 +908,17 @@ def render_html(payload: dict) -> str:
     }}
     .perfect-head h2 {{ margin: 0; }}
     .perfect-stamp {{ color: var(--muted); font-size: 0.75rem; font-weight: 600; }}
+    .perfect-goal {{
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(244, 228, 184, 0.35);
+      border: 1px solid rgba(215, 199, 161, 0.75);
+      color: var(--ink);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }}
+    .perfect-goal strong {{ font-weight: 800; }}
     .perfect-hero {{
       position: relative;
       border-radius: calc(var(--radius) + 4px);
@@ -994,7 +1073,19 @@ def render_html(payload: dict) -> str:
       letter-spacing: 0.06em;
       text-transform: uppercase;
       color: var(--accent-2);
-      margin-bottom: 8px;
+      margin-bottom: 6px;
+    }}
+    .alt-lead {{
+      margin: 0 0 10px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }}
+    .alt-note {{
+      margin: 10px 0 0;
+      font-size: 0.8rem;
+      line-height: 1.35;
+      color: var(--ink);
     }}
     .alt-grid {{
       display: grid;

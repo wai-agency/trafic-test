@@ -385,7 +385,12 @@ def compute_perfect_payload() -> dict:
     scored.sort(key=lambda s: (s.arrive_buzim, s.border_wait_min, s.border_cars, s.drive_sec))
     best = scored[0]
     low_border = [s for s in scored if s.border_cars <= 3.5]
-    best_low = min(low_border, key=lambda s: s.arrive_buzim) if low_border else None
+    # Quiet-border pick = least wait (not earliest arrival among quiet slots)
+    best_low = (
+        min(low_border, key=lambda s: (s.border_wait_min, s.border_cars, s.arrive_buzim))
+        if low_border
+        else None
+    )
 
     # Unique departure times for primary route (timeline strip)
     primary = [s for s in scored if s.route.id == "primary"]
@@ -428,9 +433,10 @@ def compute_perfect_payload() -> dict:
         "top": [_slot_dict(s) for s in scored[:10]],
         "timeline": timeline,
         "hint": (
-            "Rückfahrt Bužim → Waiblingen · Google Live-Stau + Nakordoni Maljevac-Forecast "
-            "(+ HAK-Cam KI wenn Grenze nah). Abfahrtsfenster inkl. 00–05. "
-            "Verpasste Abfahrt → automatisch nächste beste."
+            "„Perfekt“ = früheste Ankunft in Waiblingen — nicht die leerste Grenze. "
+            "Lange Grenzwartezeit kann trotzdem best sein, wenn Nachtslots erst Nachmittag ankommen. "
+            "Daten: Google Live-Stau + Nakordoni-Forecast (+ HAK-Cam KI wenn Grenze nah). "
+            "Nachtfenster 00–05 · verpasste Abfahrt → nächste beste."
         ),
     }
 
@@ -551,7 +557,16 @@ def advance_perfect_payload(
     ]
     best_low = None
     if low:
-        low_pick = sorted(low, key=sort_key)[0]
+        low_pick = sorted(
+            low,
+            key=lambda s: (
+                s.get("border_wait_min") if s.get("border_wait_min") is not None else 999,
+                s.get("border_cars") if s.get("border_cars") is not None else 99,
+                _parse_iso(s.get("arrive_buzim"))
+                or _parse_iso(s.get("depart"))
+                or datetime.max.replace(tzinfo=TZ),
+            ),
+        )[0]
         if low_pick.get("depart") != new_best.get("depart"):
             best_low = dict(low_pick)
             best_low["badge"] = "freie Grenze"
