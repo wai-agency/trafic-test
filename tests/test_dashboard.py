@@ -285,7 +285,7 @@ def test_stau_zeitachse_maps_alerts_and_renders():
             source="GPMaljevac",
             severity="critical",
             title="Kolaps u Sloveniji",
-            detail="kolone",
+            detail="kolone predor Karavanke",
             location="Slowenien",
         ),
         Alert(
@@ -332,6 +332,50 @@ def test_stau_zeitachse_maps_alerts_and_renders():
     assert "axis-corridor" in html
     assert "Grenze Maljevac nach Abfahrt" in html
     assert "axis-hour" in html
+    assert "Quelle: GPMaljevac" in html
+
+
+def test_stau_zeitachse_ignores_maribor_for_karawanken():
+    """Maribor/Štajerska is the Graz alternative — not Karawanken tunnel."""
+    from traffic_monitor.dashboard import build_stau_zeitachse
+    from traffic_monitor.models import Alert
+
+    alerts = [
+        Alert(
+            source="GPMaljevac",
+            severity="critical",
+            title="Zastoji prema Mariboru: Zapalio se automobil, formirale se duge kolone",
+            detail=(
+                "Štajerska autocesta u Sloveniji ponovno je otvorena za saobraćaj "
+                "nakon što je ranije bila potpuno zatvorena zbog zapaljenog vozila "
+                "između čvorova Celje istok i Dramlje u smjeru Maribora."
+            ),
+            location="Slowenien",
+        )
+    ]
+    axis = build_stau_zeitachse(alerts)
+    by_id = {s["id"]: s for s in axis["segments"]}
+    assert by_id["karawanken"]["severity"] == "clear"
+    assert by_id["karawanken"]["summary"] == "Ruhig"
+
+
+def test_stau_zeitachse_generic_slovenia_still_karawanken():
+    from traffic_monitor.dashboard import build_stau_zeitachse
+    from traffic_monitor.models import Alert
+
+    alerts = [
+        Alert(
+            source="GPMaljevac",
+            severity="warning",
+            title="Gužve u Sloveniji na A2",
+            detail="duže kolone prema granici",
+            location="Slowenien",
+        )
+    ]
+    axis = build_stau_zeitachse(alerts)
+    by_id = {s["id"]: s for s in axis["segments"]}
+    assert by_id["karawanken"]["severity"] == "warning"
+    assert "GPMaljevac" in (by_id["karawanken"]["summary"] or "")
 
 
 def test_stau_zeitachse_overlays_lucko():
