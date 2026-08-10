@@ -152,6 +152,61 @@ hak_cameras:
       role: "lucko_exit"
       page: "https://m.hak.hr/kamera.asp?g=1&k=15"
 
+# Corridor live cams beyond HAK (no OpenAI vision). ASFINAG CamPic stills on A11;
+# DARS Hrušica JPEGs for the SI approach (may be blocked in some cloud networks —
+# dashboard still refreshes them in the browser when reachable).
+corridor_cameras:
+  page: "https://www.asfinag.at/verkehr-sicherheit/webcams/"
+  cams:
+    - id: asfinag-a11-tu
+      name: "Karawanken Tunnel — TU → Villach"
+      direction: "SI→AT → Villach"
+      provider: asfinag
+      relevant: true
+      role: karawanken
+      image_url: "https://webcams2.asfinag.at/webcamviewer/CamPicServlet?user=webcamstartseite&wcsid=A011_016,352_2_00112805"
+      page: "https://www.asfinag.at/verkehr-sicherheit/webcams/"
+    - id: asfinag-a11-maut
+      name: "Karawanken — Parkplatz Grenze / Maut"
+      direction: "Mautstelle Rosenbach"
+      provider: asfinag
+      relevant: true
+      role: karawanken
+      image_url: "https://webcams2.asfinag.at/webcamviewer/CamPicServlet?user=webcamstartseite&wcsid=A011_015,110_1_00082340"
+      page: "https://www.asfinag.at/verkehr-sicherheit/webcams/"
+    - id: asfinag-a11-vor-maut
+      name: "A11 — vor Mautstelle → Villach"
+      direction: "Richtung Villach"
+      provider: asfinag
+      relevant: true
+      role: karawanken
+      image_url: "https://webcams2.asfinag.at/webcamviewer/CamPicServlet?user=webcamstartseite&wcsid=A011_013,665_0_00106205"
+      page: "https://www.asfinag.at/verkehr-sicherheit/webcams/"
+    - id: asfinag-a11-towards-tunnel
+      name: "A11 — Richtung Karawankentunnel / SLO"
+      direction: "Richtung Tunnel / SLO"
+      provider: asfinag
+      relevant: false
+      role: karawanken
+      image_url: "https://webcams2.asfinag.at/webcamviewer/CamPicServlet?user=webcamstartseite&wcsid=A011_007,292_0_00114016"
+      page: "https://www.asfinag.at/verkehr-sicherheit/webcams/"
+    - id: dars-hrusica-portal
+      name: "Karavanke (SI) — Hrušica vor Tunnel"
+      direction: "SI → AT"
+      provider: dars
+      relevant: true
+      role: karawanken_si
+      image_url: "https://kamere.dars.si/kamere/Hrusica/VN_0601_02.jpg"
+      page: "https://www.promet.si/"
+    - id: dars-hrusica-panorama
+      name: "Karavanke (SI) — Hrušica Panorama"
+      direction: "SI → AT"
+      provider: dars
+      relevant: true
+      role: karawanken_si
+      image_url: "https://kamere.dars.si/kamere/hrusica/IP3%20Panorama%20Hrusica.jpg"
+      page: "https://www.promet.si/"
+
 # Facebook page «Granični prijelaz Maljevac» (same community as gpmaljevac.com).
 # Direct post fetch needs FACEBOOK_PAGE_ACCESS_TOKEN secret; RSS covers portal posts always.
 facebook_gpmaljevac:

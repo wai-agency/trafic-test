@@ -418,6 +418,10 @@ def _payload_from_alerts(
         ],
         "links": [
             {"label": "ASFINAG", "url": "https://www.asfinag.at/"},
+            {
+                "label": "ASFINAG Webcams",
+                "url": "https://www.asfinag.at/verkehr-sicherheit/webcams/",
+            },
             {"label": "promet.si", "url": "https://www.promet.si/"},
             {"label": "HAK", "url": "https://www.hak.hr/info/stanje-na-cestama"},
             {"label": "GPMaljevac", "url": "https://gpmaljevac.com/"},
@@ -1633,7 +1637,7 @@ def render_html(payload: dict) -> str:
 
     {stau_html}
 
-    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Kameras (HAK, live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac + Lučko (A1) · Bild live ~alle 10s · KI-Zählung ~alle 20 Min · Tippen vergrößert</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
+    {"<section aria-labelledby='cams-title'><h2 id='cams-title'>Kameras (live)</h2><p class='empty' style='margin-bottom:12px'>Maljevac + Lučko (HAK) · Karawanken (ASFINAG/DARS) · Bild live ~alle 10s · KI-Zählung nur HAK ~alle 20 Min · Tippen vergrößert</p><div class='cams'>" + cameras_html + "</div></section>" if cameras_html else ""}
 
     <section aria-labelledby="route-title">
       <h2 id="route-title">Route</h2>
@@ -1657,7 +1661,7 @@ def render_html(payload: dict) -> str:
 
     {"<section><h2>Quellen offline</h2><ul class='downs'>" + downs_html + "</ul></section>" if downs_html else ""}
 
-    <footer>BuzimLine · Kameras live · KI/Perfect ~alle 20 Min (Requeue-Loop) · HAK HD + OpenAI Vision (Terra)</footer>
+    <footer>BuzimLine · Kameras live · KI/Perfect ~alle 20 Min (Requeue-Loop) · HAK HD + ASFINAG/DARS Karawanken · OpenAI Vision (Terra)</footer>
   </main>
   <div class="lightbox" id="cam-lightbox" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Kamera vergrößert">
     <div class="lightbox-inner">
@@ -2133,7 +2137,7 @@ def _camera_card(cam: dict) -> str:
     return f"""
     <button type="button" class="cam{relevant}" data-cam-open data-cam-title="{name}" aria-label="Kamera vergrößern: {name}">
       <div class="cam-media">
-        <img src="{img}" data-cam="{live}"{snap_attr} alt="HAK Kamera {name}" loading="lazy" />
+        <img src="{img}" data-cam="{live}"{snap_attr} alt="Kamera {name}" loading="lazy" />
         <span class="cam-zoom">Tippen · größer</span>
       </div>
       <span class="cam-body">

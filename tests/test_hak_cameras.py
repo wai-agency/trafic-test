@@ -422,6 +422,7 @@ def test_cameras_from_config():
     assert cams[1]["role"] == "to_bih"
     assert cams[0]["image_url"].endswith("/429.jpg")
     assert "www.hak.hr/info/kamere" in cams[0]["image_url"]
+    assert cams[0]["provider"] == "hak"
 
 
 def test_cameras_from_config_lucko_page():
@@ -441,6 +442,59 @@ def test_cameras_from_config_lucko_page():
     }
     cams = hc.cameras_from_config(cfg)
     assert cams[0]["page_url"] == "https://m.hak.hr/kamera.asp?g=1&k=15"
+
+
+def test_corridor_cameras_from_config():
+    cfg = {
+        "hak_cameras": {"cams": [{"id": 429, "name": "Maljevac", "role": "to_hr"}]},
+        "corridor_cameras": {
+            "page": "https://www.asfinag.at/verkehr-sicherheit/webcams/",
+            "cams": [
+                {
+                    "id": "asfinag-a11-tu",
+                    "name": "Karawanken Tunnel — TU → Villach",
+                    "direction": "SI→AT → Villach",
+                    "provider": "asfinag",
+                    "relevant": True,
+                    "role": "karawanken",
+                    "image_url": (
+                        "https://webcams2.asfinag.at/webcamviewer/CamPicServlet"
+                        "?user=webcamstartseite&wcsid=A011_016,352_2_00112805"
+                    ),
+                },
+                {
+                    "id": "dars-hrusica-portal",
+                    "name": "Karavanke (SI) — Hrušica",
+                    "provider": "dars",
+                    "relevant": True,
+                    "role": "karawanken_si",
+                    "image_url": "https://kamere.dars.si/kamere/Hrusica/VN_0601_02.jpg",
+                },
+            ],
+        },
+    }
+    cams = hc.cameras_from_config(cfg)
+    assert [c["id"] for c in cams] == [429, "asfinag-a11-tu", "dars-hrusica-portal"]
+    asfinag = cams[1]
+    assert asfinag["provider"] == "asfinag"
+    assert asfinag["role"] == "karawanken"
+    assert "CamPicServlet" in asfinag["image_url"]
+    assert "A011_016,352_2_00112805" in asfinag["image_url"]
+    assert cams[2]["provider"] == "dars"
+    assert hc._snapshot_filename("asfinag-a11-tu") == "asfinag-a11-tu.jpg"
+    assert hc._referer_for_url(asfinag["image_url"]) == "https://www.asfinag.at/"
+
+
+def test_watchpoints_include_karawanken_corridor_cams():
+    from traffic_monitor.config import load_config
+
+    cams = {c["id"]: c for c in hc.cameras_from_config(load_config())}
+    assert "asfinag-a11-tu" in cams
+    assert "asfinag-a11-maut" in cams
+    assert "dars-hrusica-portal" in cams
+    assert cams["asfinag-a11-tu"]["provider"] == "asfinag"
+    assert "CamPicServlet" in cams["asfinag-a11-tu"]["image_url"]
+    assert cams["dars-hrusica-portal"]["image_url"].startswith("https://kamere.dars.si/")
 
 
 def test_dashboard_embeds_cameras():
@@ -481,7 +535,8 @@ def test_dashboard_embeds_cameras():
     assert mj["cars"] == 7
 
     html_out = render_html(payload)
-    assert "Kameras (HAK, live)" in html_out
+    assert "Kameras (live)" in html_out
+    assert "Karawanken" in html_out
     assert "https://www.hak.hr/info/kamere/430.jpg" in html_out
     assert "https://m.hak.hr/kamera.asp" in html_out or "Kameras" in html_out
     assert "Eure Richtung (BiH → HR)" in html_out
@@ -492,19 +547,54 @@ def test_dashboard_embeds_cameras():
     assert "Tippen · größer" in html_out
     assert "liveCameraFeed" in html_out
     assert "REFRESH_MS = 10000" in html_out
-    assert "KI-Zählung ~alle 20 Min" in html_out
+    assert "KI-Zählung nur HAK ~alle 20 Min" in html_out
     assert "Bild live ~alle 10s" in html_out
     # Live feed base must be the HD HAK URL (not only a frozen local snapshot).
     assert "https://www.hak.hr/info/kamere/430.jpg" in html_out
     import re
 
     for m in re.finditer(
-        r'<img src="([^"]+)" data-cam="([^"]+)"(?: data-snap="([^"]*)")? alt="HAK Kamera',
+        r'<img src="([^"]+)" data-cam="([^"]+)"(?: data-snap="([^"]*)")? alt="Kamera',
         html_out,
     ):
         src, live, snap = m.group(1), m.group(2), m.group(3)
         assert "www.hak.hr/info/kamere" in live
         assert src == live or (snap and src == snap)
+
+
+def test_dashboard_embeds_karawanken_corridor_cams():
+    from traffic_monitor.dashboard import _payload_from_alerts, render_html
+
+    cfg = {
+        "route": {"from": "Bužim", "to": "Waiblingen"},
+        "hak_cameras": {"cams": []},
+        "corridor_cameras": {
+            "cams": [
+                {
+                    "id": "asfinag-a11-tu",
+                    "name": "Karawanken Tunnel — TU → Villach",
+                    "direction": "SI→AT → Villach",
+                    "provider": "asfinag",
+                    "relevant": True,
+                    "role": "karawanken",
+                    "image_url": (
+                        "https://webcams2.asfinag.at/webcamviewer/CamPicServlet"
+                        "?user=webcamstartseite&wcsid=A011_016,352_2_00112805"
+                    ),
+                }
+            ]
+        },
+    }
+    payload = _payload_from_alerts(cfg, [])
+    assert payload["cameras"][0]["id"] == "asfinag-a11-tu"
+    assert payload["cameras"][0]["live_url"].startswith(
+        "https://webcams2.asfinag.at/webcamviewer/CamPicServlet"
+    )
+    html_out = render_html(payload)
+    assert "Karawanken Tunnel — TU → Villach" in html_out
+    assert "webcams2.asfinag.at" in html_out
+    assert "A011_016,352_2_00112805" in html_out
+    assert "ASFINAG Webcams" in html_out
 
 
 def test_dashboard_embeds_lucko():

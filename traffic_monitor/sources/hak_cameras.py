@@ -83,17 +83,38 @@ def camera_mobile_page_url(cam_id: object | None = None) -> str:
     return HAK_MOBILE_PAGE
 
 
+def _snapshot_filename(cam_id: object) -> str:
+    """Filesystem-safe snapshot name (ASFINAG ids may contain commas)."""
+    raw = str(cam_id).strip() or "cam"
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", raw)
+    return f"{safe}.jpg"
+
+
+def _referer_for_url(url: str) -> str:
+    lower = url.lower()
+    if "asfinag.at" in lower:
+        return "https://www.asfinag.at/"
+    if "dars.si" in lower or "promet.si" in lower:
+        return "https://www.promet.si/"
+    return HAK_REFERER
+
+
 def cameras_from_config(config: dict) -> list[dict]:
-    """Normalised camera list for the dashboard (independent of the AI key)."""
+    """Normalised camera list for the dashboard (independent of the AI key).
+
+    Includes HAK border/toll cams plus optional ``corridor_cameras`` (ASFINAG /
+    DARS Karawanken feeds). Corridor entries use full ``image_url`` and are not
+    analysed by OpenAI vision.
+    """
+    out: list[dict] = []
     hak = config.get("hak_cameras") or {}
-    cams = hak.get("cams") or []
     image_base = str(hak.get("image_base") or HAK_IMAGE_BASE).rstrip("/")
     default_page = str(hak.get("page") or HAK_MOBILE_PAGE)
-    out: list[dict] = []
-    for cam in cams:
+    for cam in hak.get("cams") or []:
         cam_id = cam.get("id")
         if cam_id is None:
             continue
+        custom = cam.get("image_url")
         out.append(
             {
                 "id": cam_id,
@@ -101,15 +122,36 @@ def cameras_from_config(config: dict) -> list[dict]:
                 "direction": str(cam.get("direction") or ""),
                 "relevant": bool(cam.get("relevant", False)),
                 "role": str(cam.get("role") or ""),
-                "image_url": f"{image_base}/{cam_id}.jpg",
+                "provider": str(cam.get("provider") or "hak"),
+                "image_url": str(custom) if custom else f"{image_base}/{cam_id}.jpg",
                 "page_url": str(cam.get("page") or default_page),
+            }
+        )
+
+    corridor = config.get("corridor_cameras") or {}
+    corridor_page = str(corridor.get("page") or "https://www.asfinag.at/verkehr-sicherheit/webcams/")
+    for cam in corridor.get("cams") or []:
+        cam_id = cam.get("id")
+        image_url = cam.get("image_url")
+        if cam_id is None or not image_url:
+            continue
+        out.append(
+            {
+                "id": cam_id,
+                "name": str(cam.get("name") or f"Kamera {cam_id}"),
+                "direction": str(cam.get("direction") or ""),
+                "relevant": bool(cam.get("relevant", False)),
+                "role": str(cam.get("role") or ""),
+                "provider": str(cam.get("provider") or "corridor"),
+                "image_url": str(image_url),
+                "page_url": str(cam.get("page") or corridor_page),
             }
         )
     return out
 
 
 def snapshot_cameras(config: dict, out_dir: str | Path) -> dict[int | str, str]:
-    """Download current JPEGs into ``out_dir/cams/`` for reliable dashboard hosting."""
+    """Download current stills into ``out_dir/cams/`` for reliable dashboard hosting."""
     root = Path(out_dir)
     cams_dir = root / "cams"
     cams_dir.mkdir(parents=True, exist_ok=True)
@@ -117,19 +159,24 @@ def snapshot_cameras(config: dict, out_dir: str | Path) -> dict[int | str, str]:
     mapping: dict[int | str, str] = {}
     headers = {
         "User-Agent": "Mozilla/5.0 (compatible; BuzimLine/1.0; +https://github.com/wai-agency/trafic-test)",
-        "Referer": HAK_REFERER,
-        "Accept": "image/jpeg,image/*;q=0.8,*/*;q=0.5",
+        "Accept": "image/jpeg,image/png,image/*;q=0.8,*/*;q=0.5",
     }
     with httpx.Client(timeout=25.0, headers=headers, follow_redirects=True) as client:
         for cam in cameras_from_config(config):
             cam_id = cam["id"]
             try:
-                data = _download_image(client, cam_id, image_url=cam.get("image_url"))
+                data = _download_image(
+                    client,
+                    cam_id,
+                    image_url=cam.get("image_url"),
+                    provider=str(cam.get("provider") or "hak"),
+                )
             except (httpx.HTTPError, ValueError):
                 continue
-            path = cams_dir / f"{cam_id}.jpg"
+            filename = _snapshot_filename(cam_id)
+            path = cams_dir / filename
             path.write_bytes(data)
-            mapping[cam_id] = f"cams/{cam_id}.jpg?t={stamp}"
+            mapping[cam_id] = f"cams/{filename}?t={stamp}"
     return mapping
 
 
@@ -384,18 +431,23 @@ def _download_image(
     cam_id: object,
     *,
     image_url: str | None = None,
+    provider: str = "hak",
 ) -> bytes:
     url = image_url or camera_image_url(cam_id)
     # Cache-bust so we do not reuse a CDN-stale frame for vision / snapshots.
     sep = "&" if "?" in url else "?"
-    resp = client.get(f"{url}{sep}t={int(time.time())}", headers={"Referer": HAK_REFERER})
+    resp = client.get(
+        f"{url}{sep}t={int(time.time())}",
+        headers={"Referer": _referer_for_url(url)},
+    )
     resp.raise_for_status()
     ctype = resp.headers.get("content-type", "")
     if "image" not in ctype.lower():
         raise ValueError(f"unexpected content-type: {ctype!r}")
     data = resp.content
-    # Prefer HD (≥720p). Mobile cam.asp is 640×360 — reject tiny frames if possible.
-    if len(data) < 20_000:
+    # HAK HD stills are large; ASFINAG CamPic frames are often ~20–45 KB.
+    min_bytes = 20_000 if provider == "hak" else 8_000
+    if len(data) < min_bytes:
         raise ValueError(f"image too small ({len(data)} bytes) from {url}")
     return data
 
