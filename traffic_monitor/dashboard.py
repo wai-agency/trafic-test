@@ -49,7 +49,18 @@ _CORRIDOR_SEGMENTS = (
         "id": "karawanken",
         "label": "Karawanken",
         "tag": "A11 / SI",
-        "keys": ("karawan", "karavan", "a11", "slowen", "sloven", "promet"),
+        # Keep specific: generic "Slowenien" is handled below with off-corridor exclusions
+        # (Maribor/Štajerska ≠ Karawanken tunnel).
+        "keys": (
+            "karawan",
+            "karavan",
+            "a11",
+            "jesenice",
+            "hrušica",
+            "hrusica",
+            "gorenjsk",
+            "rosenbach",
+        ),
     },
     {
         "id": "tauern",
@@ -74,13 +85,32 @@ _CORRIDOR_SEGMENTS = (
 
 _SEV_RANK = {"clear": 0, "info": 1, "warning": 2, "critical": 3}
 
+# SI alerts on the Maribor/Graz alternative — must NOT paint Karawanken red.
+_SI_OFF_CORRIDOR = (
+    "maribor",
+    "celje",
+    "štajersk",
+    "stajersk",
+    "dramlje",
+    "ptuj",
+    "šentilj",
+    "sentilj",
+    "murska",
+    "koper",
+    "primorsk",
+)
+
 
 def _alert_blob(alert: Alert | dict) -> str:
+    """Text used for corridor keyword matching (no source name).
+
+    Source names like ``GPMaljevac`` contain place keywords and must not
+    paint Maljevac red for unrelated Balkan news.
+    """
     if isinstance(alert, Alert):
-        return f"{alert.source} {alert.title} {alert.detail} {alert.location}".lower()
+        return f"{alert.title} {alert.detail} {alert.location}".lower()
     return (
-        f"{alert.get('source','')} {alert.get('title','')} "
-        f"{alert.get('detail','')} {alert.get('location','')}"
+        f"{alert.get('title','')} {alert.get('detail','')} {alert.get('location','')}"
     ).lower()
 
 
@@ -150,18 +180,26 @@ def build_stau_zeitachse(
                     b["delay_min"] = max(int(delay), int(b["delay_min"] or 0))
                 if b["summary"] in ("Ruhig", "", None) or not matched:
                     snippet = (loc or title)[:72]
-                    b["summary"] = snippet or "Störung gemeldet"
+                    src = f"{source} · " if source else ""
+                    b["summary"] = f"{src}{snippet}".strip(" ·") or "Störung gemeldet"
                 matched = True
 
-        # Generic Slowenien / GPMaljevac Balkan without precise keyword → Karawanken corridor
-        if not matched and ("slowen" in text or "sloven" in text or "balkan" in text):
+        # Generic Slowenien without precise keyword → Karawanken only when it is
+        # not clearly the Maribor/Štajerska (Graz) alternative corridor.
+        if (
+            not matched
+            and ("slowen" in text or "sloven" in text)
+            and not any(k in text for k in _SI_OFF_CORRIDOR)
+        ):
             b = buckets["karawanken"]
             b["severity"] = _worst_sev(b["severity"], sev)
             b["alert_count"] += 1
             if source and source not in b["sources"]:
                 b["sources"].append(source)
             if b["summary"] in ("Ruhig", "", None):
-                b["summary"] = (loc or title)[:72] or "Störung Slowenien"
+                snippet = (loc or title)[:56]
+                src = f"{source} · " if source else ""
+                b["summary"] = f"{src}{snippet}".strip(" ·") or "Meldung Slowenien"
 
     def _overlay_cam(bucket_id: str, side: dict | None, *, label: str) -> None:
         if not side or side.get("cars") is None:
@@ -1260,6 +1298,10 @@ def render_html(payload: dict) -> str:
       margin: 4px 0 0; color: var(--muted);
       font-size: 0.86rem; line-height: 1.35;
     }}
+    .axis-src {{
+      margin: 2px 0 0; color: var(--muted);
+      font-size: 0.72rem; opacity: 0.9;
+    }}
     .axis-hours {{
       list-style: none; margin: 0; padding: 4px 0 0;
       display: grid;
@@ -1938,6 +1980,7 @@ def _stau_zeitachse_section(stau: dict | None) -> str:
               <span class="axis-pill">{html.escape(sev_label.get(s.get('severity') or 'clear', 'Frei'))}</span>
             </div>
             <p class="axis-sum">{html.escape(s.get('summary') or 'Ruhig')}</p>
+            {('<p class="axis-src">Quelle: ' + html.escape(', '.join(s.get('sources') or [])) + '</p>') if s.get('sources') and (s.get('severity') or 'clear') != 'clear' else ''}
           </div>
         </li>
         """
