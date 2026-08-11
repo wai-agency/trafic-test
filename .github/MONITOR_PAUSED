@@ -1,0 +1,5 @@
+# Monitor is PAUSED — no live API calls (OpenAI / Google / Telegram).
+# Trip finished; user asked to switch everything off to save costs.
+# Resume: delete this file, optionally set MONITOR_KEEPALIVE=true,
+# then Actions → Traffic Monitor → Run workflow.
+paused=true
